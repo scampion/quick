@@ -180,6 +180,7 @@ git push origin v0.1.0
 After formatting, Clippy, and test checks, GitHub publishes a release with:
 
 - Linux x86_64 as a `.tar.gz` archive;
+- statically linked Linux x86_64 musl as a `.tar.gz` archive;
 - macOS Intel as a `.tar.gz` archive;
 - macOS Apple Silicon as a `.tar.gz` archive;
 - Windows x86_64 with `quick.exe` in a `.zip` archive;

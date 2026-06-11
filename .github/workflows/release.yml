@@ -89,6 +89,10 @@ jobs:
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             executable: quick
+          - runner: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            executable: quick
+            musl: true
           - runner: macos-15-intel
             target: x86_64-apple-darwin
             executable: quick
@@ -110,6 +114,12 @@ jobs:
           rustup default stable
           rustup target add "${{ matrix.target }}"
 
+      - name: Install musl toolchain
+        if: matrix.musl
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes musl-tools
+
       - name: Cache Cargo
         uses: actions/cache@v4
         with:
@@ -120,7 +130,16 @@ jobs:
           key: release-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Build release binary
+        if: ${{ !matrix.musl }}
         shell: bash
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+
+      - name: Build static musl release binary
+        if: matrix.musl
+        shell: bash
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
         run: cargo build --release --locked --target "${{ matrix.target }}"
 
       - name: Verify standalone binary on Linux and macOS

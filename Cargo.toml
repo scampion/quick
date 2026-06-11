@@ -1,6 +1,6 @@
 [package]
 name = "quick"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT"
 description = "A small internal static hosting platform inspired by Shopify Quick"
