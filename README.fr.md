@@ -64,11 +64,11 @@ fichier contenant uniquement une expression JSX est également supporté. Le ren
 JSX charge React et Babel depuis des CDN publics : le navigateur doit donc avoir
 accès à Internet.
 
-Grâce au support natif de JSX, les artefacts Claude — composants React
-interactifs générés directement par Claude — peuvent être enregistrés en `.jsx`
-et mis en ligne sans aucune étape de compilation. Il suffit de copier le code de
-l'artefact, de le déposer, et il est immédiatement accessible via son propre
-sous-domaine.
+> **Grâce au support natif de JSX, les artefacts Claude** — composants React
+> interactifs générés directement par Claude — **peuvent être enregistrés en
+> `.jsx` et mis en ligne sans aucune étape de compilation.** Il suffit de copier
+> le code de l'artefact, de le déposer, et il est immédiatement accessible via
+> son propre sous-domaine.
 
 Les déploiements en ligne de commande restent disponibles :
 

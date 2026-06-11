@@ -61,10 +61,10 @@ file renders its default React export. A file containing only a JSX expression
 is also supported. JSX rendering loads React and Babel from public CDNs, so the
 browser needs Internet access.
 
-Because Quick supports JSX natively, Claude artifacts — interactive React
-components generated directly by Claude — can be saved as `.jsx` files and
-deployed without any build step. Copy the artifact code, upload it, and it is
-immediately live under its own subdomain.
+> **Because Quick supports JSX natively, Claude artifacts** — interactive React
+> components generated directly by Claude — **can be saved as `.jsx` files and
+> deployed without any build step.** Copy the artifact code, upload it, and it is
+> immediately live under its own subdomain.
 
 Command-line deployments remain available:
 
