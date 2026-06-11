@@ -319,7 +319,7 @@ fn jsx_response(path: &Path, source: &[u8]) -> Response<Vec<u8>> {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{file_name_html}</title>
   <script type="importmap">
-    {{"imports":{{"react":"https://esm.sh/react@18.3.1","react/jsx-runtime":"https://esm.sh/react@18.3.1/jsx-runtime","react-dom/client":"https://esm.sh/react-dom@18.3.1/client"}}}}
+    {{"imports":{{"react":"https://esm.sh/react@18.3.1","react/jsx-runtime":"https://esm.sh/react@18.3.1/jsx-runtime","react/jsx-dev-runtime":"https://esm.sh/react@18.3.1/jsx-dev-runtime","react-dom":"https://esm.sh/react-dom@18.3.1?external=react","react-dom/client":"https://esm.sh/react-dom@18.3.1/client?external=react","react-dom/server":"https://esm.sh/react-dom@18.3.1/server?external=react"}}}}
   </script>
   <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
   <style>
@@ -339,9 +339,52 @@ fn jsx_response(path: &Path, source: &[u8]) -> Response<Vec<u8>> {
       const moduleSource = hasDefaultExport
         ? source
         : `export default function QuickEntry() {{ return (${{source}}); }}`;
+      const pinnedModules = new Map([
+        ["react", "https://esm.sh/react@18.3.1"],
+        ["react/jsx-runtime", "https://esm.sh/react@18.3.1/jsx-runtime"],
+        ["react/jsx-dev-runtime", "https://esm.sh/react@18.3.1/jsx-dev-runtime"],
+        ["react-dom", "https://esm.sh/react-dom@18.3.1?external=react"],
+        ["react-dom/client", "https://esm.sh/react-dom@18.3.1/client?external=react"],
+        ["react-dom/server", "https://esm.sh/react-dom@18.3.1/server?external=react"]
+      ]);
+      const isBareModule = specifier =>
+        !specifier.startsWith(".") &&
+        !specifier.startsWith("/") &&
+        !specifier.startsWith("#") &&
+        !/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(specifier);
+      const resolveModule = specifier => {{
+        const pinned = pinnedModules.get(specifier);
+        if (pinned) return pinned;
+        if (!isBareModule(specifier)) return specifier;
+        const separator = specifier.includes("?") ? "&" : "?";
+        return `https://esm.sh/${{specifier}}${{separator}}external=react,react-dom`;
+      }};
+      const resolveImports = ({{ types }}) => ({{
+        visitor: {{
+          ImportDeclaration(path) {{
+            path.node.source.value = resolveModule(path.node.source.value);
+          }},
+          ExportNamedDeclaration(path) {{
+            if (path.node.source) path.node.source.value = resolveModule(path.node.source.value);
+          }},
+          ExportAllDeclaration(path) {{
+            path.node.source.value = resolveModule(path.node.source.value);
+          }},
+          CallExpression(path) {{
+            if (
+              path.node.callee.type === "Import" &&
+              path.node.arguments.length === 1 &&
+              types.isStringLiteral(path.node.arguments[0])
+            ) {{
+              path.node.arguments[0].value = resolveModule(path.node.arguments[0].value);
+            }}
+          }}
+        }}
+      }});
       const transformed = Babel.transform(moduleSource, {{
         filename: {file_name_js},
         sourceType: "module",
+        plugins: [resolveImports],
         presets: [["react", {{ runtime: "automatic" }}]]
       }}).code;
       const moduleUrl = URL.createObjectURL(new Blob([transformed], {{ type: "text/javascript" }}));
@@ -635,6 +678,11 @@ mod tests {
 
         assert!(body.contains("@babel/standalone"));
         assert!(body.contains("react-dom/client"));
+        assert!(body.contains("plugins: [resolveImports]"));
+        assert!(body.contains("https://esm.sh/${specifier}"));
+        assert!(body.contains("ImportDeclaration(path)"));
+        assert!(body.contains("ExportAllDeclaration(path)"));
+        assert!(body.contains(r#"path.node.callee.type === "Import""#));
         assert!(body.contains("ZXhwb3J0IGRlZmF1bHQ"));
     }
 

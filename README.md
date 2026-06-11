@@ -58,8 +58,12 @@ files are rejected.
 All file types are accepted. When the root does not contain an `index.html`,
 Quick displays a listing with a link to every uploaded file. Opening a `.jsx`
 file renders its default React export. A file containing only a JSX expression
-is also supported. JSX rendering loads React and Babel from public CDNs, so the
-browser needs Internet access.
+is also supported. Bare npm imports such as `lucide-react`, `date-fns/format`,
+and `@scope/package` are resolved automatically through esm.sh. React 18 is
+pinned by Quick; other packages can include a version in their import specifier
+(for example `package@1.2.3`) when reproducible rendering is required. JSX
+rendering loads React, Babel, and npm modules from public CDNs, so the browser
+needs Internet access.
 
 > **Because Quick supports JSX natively, Claude artifacts** — interactive React
 > components generated directly by Claude — **can be saved as `.jsx` files and
@@ -85,6 +89,28 @@ Useful options:
 quick serve --listen 0.0.0.0:8080 --sites-dir ./sites --base-domain quick.internal
 quick deploy ./dist --site my-site --sites-dir ./sites
 ```
+
+### Wildcard DNS with Pi-hole
+
+To reach every site through `<site>.quick` on your LAN, point a wildcard at the
+host running Quick. Pi-hole's web UI only handles exact hostnames, so add a
+dnsmasq drop-in `/etc/dnsmasq.d/05-quick.conf`:
+
+```
+address=/quick/192.168.178.32
+```
+
+Replace the IP with your Quick host, then reload DNS:
+
+```sh
+# Pi-hole v6 ignores /etc/dnsmasq.d by default — enable it once:
+pihole-FTL --config misc.etc_dnsmasq_d true
+systemctl restart pihole-FTL
+```
+
+The `address=/quick/IP` line resolves `quick` and every subdomain to that IP.
+Start Quick with `--base-domain quick` and clients using Pi-hole as their
+resolver can open `http://<site>.quick/`.
 
 ## Security
 

@@ -61,8 +61,12 @@ Tous les types de fichiers sont acceptés. Quand la racine ne contient pas
 d'`index.html`, Quick affiche un listing avec un lien vers chaque fichier
 déposé. L'ouverture d'un fichier `.jsx` affiche l'export React par défaut. Un
 fichier contenant uniquement une expression JSX est également supporté. Le rendu
-JSX charge React et Babel depuis des CDN publics : le navigateur doit donc avoir
-accès à Internet.
+JSX résout automatiquement les imports npm nus comme `lucide-react`,
+`date-fns/format` et `@scope/package` via esm.sh. React 18 est épinglé par Quick ;
+les autres paquets peuvent inclure une version dans leur import (par exemple
+`package@1.2.3`) lorsqu'un rendu reproductible est nécessaire. React, Babel et
+les modules npm sont chargés depuis des CDN publics : le navigateur doit donc
+avoir accès à Internet.
 
 > **Grâce au support natif de JSX, les artefacts Claude** — composants React
 > interactifs générés directement par Claude — **peuvent être enregistrés en
