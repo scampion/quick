@@ -133,7 +133,25 @@ impl StaticHost {
             files.push((PathBuf::from(file.path), content));
         }
 
-        if let Err(error) = deploy::deploy_files(files, &self.sites_dir, &request.hostname) {
+        let is_zip = files.len() == 1
+            && files[0]
+                .0
+                .extension()
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"));
+        let deployment = if is_zip {
+            let (_, archive) = files.pop().expect("one ZIP file");
+            deploy::deploy_zip(
+                archive,
+                &self.sites_dir,
+                &request.hostname,
+                MAX_FILES,
+                MAX_DEPLOY_BYTES,
+            )
+        } else {
+            deploy::deploy_files(files, &self.sites_dir, &request.hostname)
+        };
+
+        if let Err(error) = deployment {
             let message = error.to_string();
             return json_error_owned(400, message);
         }

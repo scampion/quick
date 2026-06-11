@@ -73,8 +73,13 @@
       .drop-hint, .file-meta { margin: 0; color: var(--muted); font: 400 13px/1.6 "SFMono-Regular", Consolas, monospace; }
       .file-meta { margin-top: 14px; color: var(--blue); }
       input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+      .zip-picker {
+        display: inline; width: auto; border: 0; padding: 0; background: transparent;
+        color: inherit; font: inherit; text-decoration: underline; text-underline-offset: 3px;
+      }
+      .zip-picker:hover:not(:disabled) { transform: none; box-shadow: none; }
       .config { padding: 42px 34px; display: flex; flex-direction: column; }
-      .config label { margin: auto 0 10px; font: 500 11px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+      .config label { margin: auto 0 10px; font: 500 11px "SFMono-Regular", Consolas, monospace; letter-spacing: .1em; text-transform: uppercase; }
       .host-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); }
       .host-row input {
         min-width: 0; width: 100%; border: 0; background: transparent; padding: 13px 0;
@@ -120,16 +125,21 @@
       <p class="lede">Un dossier, un hostname, zéro pipeline. Glissez votre site ici et obtenez une URL immédiatement.</p>
 
       <form class="workspace" id="deploy-form">
-        <label class="drop" id="drop-zone" for="files">
+        <div class="drop" id="drop-zone" role="button" tabindex="0" aria-label="Déposer ou sélectionner un dossier">
           <span class="drop-number">01 / FICHIERS</span>
           <span class="drop-icon">+</span>
           <span class="drop-copy">
-            <h2>Glissez votre dossier ici</h2>
-            <p class="drop-hint">ou cliquez pour le sélectionner<br>HTML, CSS, JS, images — 25 Mo maximum</p>
+            <h2>Glissez votre dossier ou ZIP ici</h2>
+            <p class="drop-hint">
+              cliquez pour sélectionner un dossier ou
+              <button class="zip-picker" id="zip-picker" type="button">choisir un ZIP</button><br>
+              HTML, CSS, JS, images — 25 Mo décompressés maximum
+            </p>
             <p class="file-meta" id="file-meta">Aucun fichier sélectionné</p>
           </span>
-          <input id="files" type="file" multiple webkitdirectory>
-        </label>
+        </div>
+        <input id="files" type="file" multiple webkitdirectory aria-label="Sélectionner un dossier">
+        <input id="zip-file" type="file" accept=".zip,application/zip" aria-label="Sélectionner une archive ZIP">
 
         <section class="config">
           <span class="drop-number">02 / ADRESSE</span>
@@ -152,6 +162,8 @@
     <script>
       const form = document.querySelector("#deploy-form");
       const input = document.querySelector("#files");
+      const zipInput = document.querySelector("#zip-file");
+      const zipPicker = document.querySelector("#zip-picker");
       const drop = document.querySelector("#drop-zone");
       const hostname = document.querySelector("#hostname");
       const button = document.querySelector("#deploy");
@@ -174,6 +186,13 @@
       }
 
       function setFiles(files) {
+        const isZip = files.length === 1 && files[0].file.name.toLowerCase().endsWith(".zip");
+        if (isZip) {
+          selected = [{ file: files[0].file, path: files[0].file.name }];
+          meta.textContent = `Archive ZIP · ${formatSize(files[0].file.size)}`;
+          validate();
+          return;
+        }
         const root = commonRoot(files);
         selected = files.map(file => ({ file: file.file, path: file.path.slice(root.length) }))
           .filter(file => file.path && !file.path.startsWith("."));
@@ -192,6 +211,20 @@
 
       input.addEventListener("change", () => setFiles(
         [...input.files].map(file => ({ file, path: file.webkitRelativePath || file.name }))
+      ));
+      drop.addEventListener("click", () => input.click());
+      drop.addEventListener("keydown", event => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          input.click();
+        }
+      });
+      zipPicker.addEventListener("click", event => {
+        event.stopPropagation();
+        zipInput.click();
+      });
+      zipInput.addEventListener("change", () => setFiles(
+        [...zipInput.files].map(file => ({ file, path: file.name }))
       ));
       hostname.addEventListener("input", validate);
       ["dragenter", "dragover"].forEach(event => drop.addEventListener(event, e => {

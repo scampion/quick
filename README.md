@@ -8,6 +8,7 @@ obtenir immédiatement un site adressable par sous-domaine.
 
 - remplacement transactionnel d'un dossier statique avec restauration sur erreur;
 - homepage de déploiement avec sélection ou drag-and-drop d'un dossier;
+- upload d'archives ZIP avec extraction sécurisée;
 - homepage entièrement embarquée dans le binaire, sans asset externe;
 - configuration du hostname et retour immédiat de l'URL publiée;
 - routage `<site>.<domaine>` avec Pingora;
@@ -29,6 +30,11 @@ cargo run -- serve
 Ouvrir <http://localhost:8080>, choisir un dossier contenant un `index.html`,
 puis définir son hostname. Le site sera disponible sur
 `http://<hostname>.localhost:8080`.
+
+La homepage accepte aussi une archive ZIP. Si tous ses fichiers se trouvent
+dans un même dossier racine, ce dossier est retiré automatiquement. Les
+archives sont limitées à 1 000 entrées et 25 Mo décompressés; les chemins
+sortants, liens symboliques et fichiers chiffrés sont refusés.
 
 Le déploiement en ligne de commande reste disponible:
 

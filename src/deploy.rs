@@ -1,5 +1,6 @@
+use std::collections::HashSet;
 use std::fs;
-use std::io;
+use std::io::{self, Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -81,6 +82,134 @@ pub fn deploy_files(
     Ok(())
 }
 
+pub fn deploy_zip(
+    archive_bytes: Vec<u8>,
+    sites_dir: &Path,
+    site: &str,
+    max_files: usize,
+    max_uncompressed_bytes: usize,
+) -> io::Result<()> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(archive_bytes)).map_err(zip_error)?;
+    if archive.len() > max_files {
+        return Err(invalid_input(format!(
+            "ZIP archive exceeds the limit of {max_files} entries"
+        )));
+    }
+
+    let mut paths = Vec::new();
+    let mut total_size = 0_u64;
+    for index in 0..archive.len() {
+        let file = archive.by_index(index).map_err(zip_error)?;
+        if file.encrypted() {
+            return Err(invalid_input("encrypted ZIP files are not supported"));
+        }
+        if file.is_symlink() {
+            return Err(invalid_input(
+                "symbolic links in ZIP files are not supported",
+            ));
+        }
+        let path = file
+            .enclosed_name()
+            .ok_or_else(|| invalid_input(format!("unsafe ZIP path: {}", file.name())))?;
+        if path.as_os_str().is_empty() || is_ignored_archive_path(&path) {
+            continue;
+        }
+
+        if file.is_file() {
+            total_size = total_size
+                .checked_add(file.size())
+                .ok_or_else(|| invalid_input("ZIP archive is too large"))?;
+            if total_size > max_uncompressed_bytes as u64 {
+                return Err(invalid_input(format!(
+                    "ZIP contents exceed the limit of {} MiB",
+                    max_uncompressed_bytes / (1024 * 1024)
+                )));
+            }
+            paths.push(path);
+        }
+    }
+
+    let root = common_archive_root(&paths);
+    let mut files = Vec::with_capacity(paths.len());
+    let mut seen = HashSet::with_capacity(paths.len());
+    let mut actual_size = 0_usize;
+    for index in 0..archive.len() {
+        let mut file = archive.by_index(index).map_err(zip_error)?;
+        if !file.is_file() {
+            continue;
+        }
+
+        let original_path = file
+            .enclosed_name()
+            .ok_or_else(|| invalid_input(format!("unsafe ZIP path: {}", file.name())))?;
+        if is_ignored_archive_path(&original_path) {
+            continue;
+        }
+        let relative_path = match &root {
+            Some(root) => original_path
+                .strip_prefix(root)
+                .map(Path::to_path_buf)
+                .map_err(|_| invalid_input("ZIP archive has an inconsistent root directory"))?,
+            None => original_path,
+        };
+        let relative_path = safe_upload_path(&relative_path)?.to_path_buf();
+        if !seen.insert(relative_path.clone()) {
+            return Err(invalid_input(format!(
+                "duplicate ZIP path: {}",
+                relative_path.display()
+            )));
+        }
+
+        let remaining = max_uncompressed_bytes.saturating_sub(actual_size);
+        let mut content = Vec::with_capacity(file.size().min(remaining as u64) as usize);
+        file.by_ref()
+            .take(remaining as u64 + 1)
+            .read_to_end(&mut content)?;
+        actual_size += content.len();
+        if actual_size > max_uncompressed_bytes {
+            return Err(invalid_input(format!(
+                "ZIP contents exceed the limit of {} MiB",
+                max_uncompressed_bytes / (1024 * 1024)
+            )));
+        }
+        files.push((relative_path, content));
+    }
+
+    if files.is_empty() {
+        return Err(invalid_input("ZIP archive contains no files"));
+    }
+    deploy_files(files, sites_dir, site)
+}
+
+fn common_archive_root(paths: &[PathBuf]) -> Option<PathBuf> {
+    let first_root = paths.first()?.components().next()?;
+    if paths
+        .iter()
+        .all(|path| path.components().count() >= 2 && path.components().next() == Some(first_root))
+    {
+        Some(PathBuf::from(first_root.as_os_str()))
+    } else {
+        None
+    }
+}
+
+fn is_ignored_archive_path(path: &Path) -> bool {
+    path.components()
+        .next()
+        .is_some_and(|component| component.as_os_str() == "__MACOSX")
+        || path
+            .file_name()
+            .is_some_and(|file_name| file_name == ".DS_Store")
+}
+
+fn invalid_input(message: impl Into<String>) -> io::Error {
+    io::Error::new(io::ErrorKind::InvalidInput, message.into())
+}
+
+fn zip_error(error: zip::result::ZipError) -> io::Error {
+    invalid_input(format!("invalid ZIP archive: {error}"))
+}
+
 fn create_staging_dir(sites_dir: &Path, site: &str) -> io::Result<PathBuf> {
     fs::create_dir_all(sites_dir)?;
     let staging = sites_dir.join(format!(".{site}-{}.tmp", nonce()));
@@ -160,6 +289,19 @@ fn copy_directory(source: &Path, destination: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+
+    fn make_zip(files: &[(&str, &[u8])]) -> Vec<u8> {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (path, content) in files {
+            writer
+                .start_file(*path, SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(content).unwrap();
+        }
+        writer.finish().unwrap().into_inner()
+    }
 
     #[test]
     fn deploys_and_replaces_a_site() {
@@ -223,5 +365,85 @@ mod tests {
         .unwrap_err();
         assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
         assert!(!sites.join("unsafe").exists());
+    }
+
+    #[test]
+    fn deploys_zip_and_strips_a_single_root_directory() {
+        let temp = tempfile::tempdir().unwrap();
+        let sites = temp.path().join("sites");
+        let archive = make_zip(&[
+            ("my-site/index.html", b"zip home"),
+            ("my-site/assets/app.js", b"zip app"),
+        ]);
+
+        deploy_zip(archive, &sites, "zip-site", 100, 1024 * 1024).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(sites.join("zip-site/index.html")).unwrap(),
+            "zip home"
+        );
+        assert_eq!(
+            fs::read_to_string(sites.join("zip-site/assets/app.js")).unwrap(),
+            "zip app"
+        );
+    }
+
+    #[test]
+    fn ignores_macos_metadata_in_zip_archives() {
+        let temp = tempfile::tempdir().unwrap();
+        let sites = temp.path().join("sites");
+        let archive = make_zip(&[
+            ("my-site/index.html", b"zip home"),
+            ("my-site/.DS_Store", b"metadata"),
+            ("__MACOSX/my-site/._index.html", b"metadata"),
+        ]);
+
+        deploy_zip(archive, &sites, "mac-zip", 100, 1024 * 1024).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(sites.join("mac-zip/index.html")).unwrap(),
+            "zip home"
+        );
+        assert!(!sites.join("mac-zip/.DS_Store").exists());
+        assert!(!sites.join("mac-zip/__MACOSX").exists());
+    }
+
+    #[test]
+    fn rejects_unsafe_or_oversized_zip_archives() {
+        let temp = tempfile::tempdir().unwrap();
+        let sites = temp.path().join("sites");
+        let unsafe_archive = make_zip(&[("index.html", b"home"), ("../outside.txt", b"outside")]);
+        let error = deploy_zip(unsafe_archive, &sites, "unsafe-zip", 100, 1024 * 1024).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!sites.join("unsafe-zip").exists());
+
+        let large_archive = make_zip(&[("index.html", &[b'x'; 128])]);
+        let error = deploy_zip(large_archive, &sites, "large-zip", 100, 64).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!sites.join("large-zip").exists());
+
+        let too_many_files = make_zip(&[("index.html", b"home"), ("asset.txt", b"asset")]);
+        let error = deploy_zip(too_many_files, &sites, "many-zip", 1, 1024).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!sites.join("many-zip").exists());
+    }
+
+    #[test]
+    fn rejects_symbolic_links_in_zip_archives() {
+        let mut writer = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        writer
+            .start_file("index.html", SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(b"home").unwrap();
+        writer
+            .add_symlink("linked-file", "/etc/passwd", SimpleFileOptions::default())
+            .unwrap();
+        let archive = writer.finish().unwrap().into_inner();
+        let temp = tempfile::tempdir().unwrap();
+
+        let error =
+            deploy_zip(archive, &temp.path().join("sites"), "links", 100, 1024).unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(!temp.path().join("sites/links").exists());
     }
 }
