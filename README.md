@@ -2,7 +2,11 @@
 
 A Rust/Pingora implementation of the core idea behind
 [Shopify Quick](https://shopify.engineering/quick): drop files and immediately
-get a site available through its own subdomain.
+get a site available through its own subdomain with a single binary 
+
+
+
+![screenshot](./assets/screenshot.png)
 
 ## Features
 
@@ -156,10 +160,15 @@ git push origin v0.1.0
 
 After formatting, Clippy, and test checks, GitHub publishes a release with:
 
-- Linux x86_64;
-- macOS Intel;
-- macOS Apple Silicon;
+- Linux x86_64 as a `.tar.gz` archive;
+- macOS Intel as a `.tar.gz` archive;
+- macOS Apple Silicon as a `.tar.gz` archive;
+- Windows x86_64 with `quick.exe` in a `.zip` archive;
 - a SHA-256 checksum for each archive.
+
+Each archive contains the executable and this README. The workflow starts every
+binary on its native GitHub runner and verifies the embedded homepage before
+publishing it.
 
 The workflow can also be started manually from GitHub Actions. In that case,
 it builds and stores the artifacts without creating a GitHub Release.

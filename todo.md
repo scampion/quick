@@ -56,7 +56,8 @@
 - [ ] Limitation de débit et protection anti-abus
 - [ ] Analyse antivirus des fichiers
 - [ ] Tests end-to-end navigateur
-- [ ] Binaires Windows et Linux ARM64
+- [x] Binaire Windows x86_64
+- [ ] Binaire Linux ARM64
 
 ## Priorités recommandées
 

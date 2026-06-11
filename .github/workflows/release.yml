@@ -80,22 +80,31 @@ jobs:
   build:
     name: Build ${{ matrix.target }}
     needs: verify
+    env:
+      RELEASE_VERSION: ${{ github.ref_type == 'tag' && github.ref_name || 'manual' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - runner: macos-latest
+            executable: quick
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
-          - runner: macos-latest
+            executable: quick
+          - runner: macos-15
             target: aarch64-apple-darwin
+            executable: quick
+          - runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            executable: quick.exe
     runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Install Rust target
+        shell: bash
         run: |
           rustup toolchain install stable --profile minimal
           rustup default stable
@@ -111,25 +120,98 @@ jobs:
           key: release-${{ matrix.target }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Build release binary
+        shell: bash
         run: cargo build --release --locked --target "${{ matrix.target }}"
 
-      - name: Verify dashboard is embedded
+      - name: Verify standalone binary on Linux and macOS
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          LC_ALL=C grep -a -q -F \
-            "quick-dashboard-bundle-v1" \
-            "target/${{ matrix.target }}/release/quick"
+          bundle="$(mktemp -d)"
+          cp "target/${{ matrix.target }}/release/${{ matrix.executable }}" "$bundle/quick"
+          cd "$bundle"
+          chmod +x quick
+          ./quick serve --listen 127.0.0.1:18080 >quick.log 2>&1 &
+          quick_pid=$!
+          trap 'kill "$quick_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent \
+              --header "Host: localhost:18080" \
+              http://127.0.0.1:18080/ >homepage.html; then
+              break
+            fi
+            sleep 0.25
+          done
+          grep --fixed-strings "quick-dashboard-bundle-v1" homepage.html
+          test ! -e dashboard.html
+          test ! -d src
 
-      - name: Package archive
+      - name: Verify standalone binary on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP "quick-smoke"
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.executable }}" "$bundle/quick.exe"
+          Push-Location $bundle
+          $process = Start-Process `
+            -FilePath ".\quick.exe" `
+            -ArgumentList "serve", "--listen", "127.0.0.1:18080" `
+            -RedirectStandardOutput "quick.log" `
+            -RedirectStandardError "quick-error.log" `
+            -PassThru
+          try {
+            $homepage = $null
+            foreach ($attempt in 1..20) {
+              try {
+                $homepage = Invoke-WebRequest `
+                  -Uri "http://127.0.0.1:18080/" `
+                  -Headers @{ Host = "localhost:18080" } `
+                  -UseBasicParsing
+                break
+              } catch {
+                Start-Sleep -Milliseconds 250
+              }
+            }
+            if ($null -eq $homepage) {
+              Get-Content "quick.log", "quick-error.log" -ErrorAction SilentlyContinue
+              throw "Quick did not start on Windows"
+            }
+            if (-not $homepage.Content.Contains("quick-dashboard-bundle-v1")) {
+              throw "The embedded dashboard marker is missing"
+            }
+            if (Test-Path "dashboard.html") {
+              throw "The binary unexpectedly requires dashboard.html"
+            }
+          } finally {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Pop-Location
+          }
+
+      - name: Package Linux and macOS archive
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME:-manual}"
-          package="quick-${version}-${{ matrix.target }}"
+          package="quick-${RELEASE_VERSION}-${{ matrix.target }}"
           mkdir -p "dist/$package"
-          cp "target/${{ matrix.target }}/release/quick" "dist/$package/"
+          cp "target/${{ matrix.target }}/release/${{ matrix.executable }}" "dist/$package/"
           cp README.md "dist/$package/"
           tar -C dist -czf "dist/$package.tar.gz" "$package"
           shasum -a 256 "dist/$package.tar.gz" > "dist/$package.tar.gz.sha256"
+
+      - name: Package Windows archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $package = "quick-$env:RELEASE_VERSION-${{ matrix.target }}"
+          $packageDirectory = Join-Path "dist" $package
+          New-Item -ItemType Directory -Path $packageDirectory -Force | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.executable }}" $packageDirectory
+          Copy-Item "README.md" $packageDirectory
+          $archive = Join-Path "dist" "$package.zip"
+          Compress-Archive -Path $packageDirectory -DestinationPath $archive
+          $hash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          "$hash  $package.zip" | Set-Content -Encoding ascii "$archive.sha256"
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -137,6 +219,7 @@ jobs:
           name: quick-${{ matrix.target }}
           path: |
             dist/*.tar.gz
+            dist/*.zip
             dist/*.sha256
           if-no-files-found: error
 
@@ -160,6 +243,7 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" \
             dist/*.tar.gz \
+            dist/*.zip \
             dist/*.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --title "Quick $GITHUB_REF_NAME" \
