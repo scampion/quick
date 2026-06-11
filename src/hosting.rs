@@ -60,10 +60,24 @@ impl StaticHost {
 
         for candidate in asset_candidates(&relative_path, request_path) {
             match self.storage.get(&site, &candidate).await {
+                Ok(Some(object)) if is_jsx(&candidate) => {
+                    return jsx_response(&candidate, &object.body);
+                }
                 Ok(Some(object)) => return response(200, &object.content_type, object.body),
                 Ok(None) => {}
                 Err(_) => return text_response(500, "Could not read the requested asset."),
             }
+        }
+        if request_path == "/" {
+            return match self
+                .storage
+                .get(&site, Path::new(deploy::MANIFEST_PATH))
+                .await
+            {
+                Ok(Some(object)) => directory_listing_response(&site, &object.body),
+                Ok(None) => text_response(404, "Site or asset not found."),
+                Err(_) => text_response(500, "Could not read the site manifest."),
+            };
         }
         text_response(404, "Site or asset not found.")
     }
@@ -158,14 +172,15 @@ impl ServeHttp for StaticHost {
             .and_then(|value| value.to_str().ok())
             .unwrap_or_default()
             .to_owned();
+        let accept_language = session
+            .req_header()
+            .headers
+            .get(http::header::ACCEPT_LANGUAGE)
+            .and_then(|value| value.to_str().ok());
 
         if is_base_host(&host, &self.base_domain) {
             return match (method, request_path.as_str()) {
-                (Method::GET, "/") => response(
-                    200,
-                    "text/html; charset=utf-8",
-                    DASHBOARD.as_bytes().to_vec(),
-                ),
+                (Method::GET, "/") => dashboard_response(accept_language),
                 (Method::POST, "/api/deploy") => self.deploy_response(session, &host).await,
                 _ => json_error(404, "Route introuvable."),
             };
@@ -187,6 +202,187 @@ fn asset_candidates(relative_path: &Path, request_path: &str) -> Vec<PathBuf> {
         candidates.push(PathBuf::from("index.html"));
     }
     candidates
+}
+
+fn dashboard_response(accept_language: Option<&str>) -> Response<Vec<u8>> {
+    let language = preferred_dashboard_language(accept_language);
+    let body = DASHBOARD.replacen(
+        r#"<meta name="quick-language" content="en">"#,
+        &format!(r#"<meta name="quick-language" content="{language}">"#),
+        1,
+    );
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(http::header::CONTENT_LENGTH, body.len())
+        .header(http::header::VARY, http::header::ACCEPT_LANGUAGE.as_str())
+        .header("x-content-type-options", "nosniff")
+        .header(http::header::CACHE_CONTROL, "no-cache")
+        .body(body.into_bytes())
+        .expect("valid dashboard response")
+}
+
+fn preferred_dashboard_language(accept_language: Option<&str>) -> &'static str {
+    let mut preferences: Vec<_> = accept_language
+        .unwrap_or_default()
+        .split(',')
+        .enumerate()
+        .filter_map(|(position, item)| {
+            let mut parts = item.trim().split(';');
+            let tag = parts.next()?.trim();
+            let quality = parts
+                .find_map(|parameter| parameter.trim().strip_prefix("q="))
+                .and_then(|value| value.parse::<f32>().ok())
+                .unwrap_or(1.0);
+            Some((quality, position, tag))
+        })
+        .collect();
+    preferences.sort_by(|left, right| {
+        right
+            .0
+            .total_cmp(&left.0)
+            .then_with(|| left.1.cmp(&right.1))
+    });
+
+    for (quality, _, tag) in preferences {
+        if quality <= 0.0 {
+            continue;
+        }
+        let primary = tag.split('-').next().unwrap_or_default();
+        if primary.eq_ignore_ascii_case("fr") {
+            return "fr";
+        }
+        if primary.eq_ignore_ascii_case("en") || tag == "*" {
+            return "en";
+        }
+    }
+    "en"
+}
+
+fn is_jsx(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("jsx"))
+}
+
+fn directory_listing_response(site: &str, manifest: &[u8]) -> Response<Vec<u8>> {
+    let manifest: deploy::SiteManifest = match serde_json::from_slice(manifest) {
+        Ok(manifest) => manifest,
+        Err(_) => return text_response(500, "The site manifest is invalid."),
+    };
+    let mut items = String::new();
+    for path in manifest.files {
+        items.push_str("<li><a href=\"/");
+        items.push_str(&percent_encode_path(&path));
+        items.push_str("\">");
+        items.push_str(&escape_html(&path));
+        items.push_str("</a></li>");
+    }
+    let body = format!(
+        r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{site} - files</title>
+  <style>
+    :root {{ color-scheme: light dark; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }}
+    body {{ max-width: 920px; margin: 0 auto; padding: 48px 24px; }}
+    h1 {{ font: 700 clamp(32px, 6vw, 64px) system-ui, sans-serif; letter-spacing: -.05em; }}
+    p {{ opacity: .65; }}
+    ul {{ padding: 0; list-style: none; border-top: 1px solid color-mix(in srgb, currentColor 20%, transparent); }}
+    li {{ border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); }}
+    a {{ display: block; padding: 14px 4px; color: inherit; text-decoration: none; }}
+    a:hover {{ padding-left: 12px; color: #7357ff; }}
+  </style>
+</head>
+<body>
+  <p>Quick file listing</p>
+  <h1>{site}</h1>
+  <ul>{items}</ul>
+</body>
+</html>"##,
+        site = escape_html(site),
+    );
+    response(200, "text/html; charset=utf-8", body.into_bytes())
+}
+
+fn jsx_response(path: &Path, source: &[u8]) -> Response<Vec<u8>> {
+    let encoded = base64::engine::general_purpose::STANDARD.encode(source);
+    let file_name = path.to_string_lossy();
+    let file_name_html = escape_html(&file_name);
+    let file_name_js = serde_json::to_string(file_name.as_ref()).expect("serializable file name");
+    let body = format!(
+        r##"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{file_name_html}</title>
+  <script type="importmap">
+    {{"imports":{{"react":"https://esm.sh/react@18.3.1","react/jsx-runtime":"https://esm.sh/react@18.3.1/jsx-runtime","react-dom/client":"https://esm.sh/react-dom@18.3.1/client"}}}}
+  </script>
+  <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
+  <style>
+    html, body, #root {{ min-height: 100%; margin: 0; }}
+    #quick-error {{ margin: 0; padding: 24px; color: #b42318; white-space: pre-wrap; font: 14px/1.5 ui-monospace, monospace; }}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <pre id="quick-error" hidden></pre>
+  <script type="module">
+    const errorNode = document.querySelector("#quick-error");
+    try {{
+      const bytes = Uint8Array.from(atob("{encoded}"), character => character.charCodeAt(0));
+      const source = new TextDecoder().decode(bytes);
+      const hasDefaultExport = /\bexport\s+default\b/.test(source);
+      const moduleSource = hasDefaultExport
+        ? source
+        : `export default function QuickEntry() {{ return (${{source}}); }}`;
+      const transformed = Babel.transform(moduleSource, {{
+        filename: {file_name_js},
+        sourceType: "module",
+        presets: [["react", {{ runtime: "automatic" }}]]
+      }}).code;
+      const moduleUrl = URL.createObjectURL(new Blob([transformed], {{ type: "text/javascript" }}));
+      const [entry, React, ReactDOM] = await Promise.all([
+        import(moduleUrl),
+        import("react"),
+        import("react-dom/client")
+      ]);
+      if (!entry.default) throw new Error("The JSX file must export a default React component.");
+      ReactDOM.createRoot(document.querySelector("#root")).render(React.createElement(entry.default));
+      URL.revokeObjectURL(moduleUrl);
+    }} catch (error) {{
+      errorNode.hidden = false;
+      errorNode.textContent = "Quick could not render " + {file_name_js} + "\n\n" + (error.stack || error);
+    }}
+  </script>
+</body>
+</html>"##
+    );
+    response(200, "text/html; charset=utf-8", body.into_bytes())
+}
+
+fn escape_html(input: &str) -> String {
+    input
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn percent_encode_path(input: &str) -> String {
+    let mut output = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~' | b'/') {
+            output.push(byte as char);
+        } else {
+            output.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    output
 }
 
 async fn read_body(session: &mut ServerSession) -> Result<Vec<u8>, &'static str> {
@@ -347,10 +543,36 @@ mod tests {
     #[test]
     fn dashboard_is_compiled_into_the_application() {
         assert!(DASHBOARD.contains("quick-dashboard-bundle-v1"));
+        assert!(DASHBOARD.contains(r#"<html lang="en">"#));
+        assert!(DASHBOARD.contains("ready to publish"));
+        assert!(DASHBOARD.contains(r#"data-language="fr""#));
         assert!(!DASHBOARD.contains("@import"));
         assert!(!DASHBOARD.contains("<script src="));
         assert!(!DASHBOARD.contains("<link "));
         assert!(!DASHBOARD.contains("<img "));
+    }
+
+    #[test]
+    fn selects_dashboard_language_from_accept_language() {
+        assert_eq!(preferred_dashboard_language(Some("fr-BE,fr;q=0.9")), "fr");
+        assert_eq!(
+            preferred_dashboard_language(Some("en-US;q=0.8,fr-FR;q=0.9")),
+            "fr"
+        );
+        assert_eq!(preferred_dashboard_language(Some("fr;q=0,en;q=0.8")), "en");
+        assert_eq!(preferred_dashboard_language(Some("de-DE,de;q=0.9")), "en");
+        assert_eq!(preferred_dashboard_language(None), "en");
+    }
+
+    #[test]
+    fn dashboard_response_exposes_the_requested_language() {
+        let response = dashboard_response(Some("fr-BE,fr;q=0.9"));
+        assert_eq!(
+            response.headers().get(http::header::VARY).unwrap(),
+            "accept-language"
+        );
+        let body = String::from_utf8(response.into_body()).unwrap();
+        assert!(body.contains(r#"<meta name="quick-language" content="fr">"#));
     }
 
     #[test]
@@ -390,6 +612,30 @@ mod tests {
             asset_candidates(Path::new("assets/app.js"), "/assets/app.js"),
             [PathBuf::from("assets/app.js")]
         );
+    }
+
+    #[test]
+    fn builds_a_safe_directory_listing() {
+        let manifest = serde_json::to_vec(&deploy::SiteManifest {
+            files: vec!["App.jsx".to_owned(), "notes & docs/read me.md".to_owned()],
+        })
+        .unwrap();
+        let response = directory_listing_response("demo", &manifest);
+        let body = String::from_utf8(response.into_body()).unwrap();
+
+        assert!(body.contains("href=\"/App.jsx\""));
+        assert!(body.contains("href=\"/notes%20%26%20docs/read%20me.md\""));
+        assert!(body.contains("notes &amp; docs/read me.md"));
+    }
+
+    #[test]
+    fn wraps_jsx_as_an_executable_react_page() {
+        let response = jsx_response(Path::new("App.jsx"), b"export default () => <h1>Hello</h1>");
+        let body = String::from_utf8(response.into_body()).unwrap();
+
+        assert!(body.contains("@babel/standalone"));
+        assert!(body.contains("react-dom/client"));
+        assert!(body.contains("ZXhwb3J0IGRlZmF1bHQ"));
     }
 
     #[test]

@@ -24,7 +24,7 @@ struct Cli {
 enum Command {
     /// Deploy a static site to the configured storage backend.
     Deploy {
-        /// Directory containing index.html and other static assets.
+        /// Directory containing the files to publish.
         source: PathBuf,
         /// Site name, used as the subdomain.
         #[arg(short, long)]

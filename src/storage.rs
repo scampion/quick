@@ -175,7 +175,7 @@ impl Storage for S3Storage {
     }
 
     async fn deploy(&self, site: &str, files: Vec<(PathBuf, Vec<u8>)>) -> io::Result<()> {
-        deploy::validate_files(&files)?;
+        let files = deploy::prepare_files(files)?;
         let release = release_id();
 
         for (path, body) in files {
@@ -303,7 +303,7 @@ mod tests {
         let address = listener.local_addr().unwrap();
         let server = thread::spawn(move || {
             let mut objects = HashMap::new();
-            for _ in 0..5 {
+            for _ in 0..6 {
                 let (mut stream, _) = listener.accept().unwrap();
                 handle_s3_request(&mut stream, &mut objects);
             }
@@ -342,6 +342,11 @@ mod tests {
         let objects = server.join().unwrap();
         assert!(objects.contains_key("/bucket/quick/sites/demo/current.json"));
         assert!(objects.keys().any(|key| key.ends_with("/assets/app.js")));
+        assert!(
+            objects
+                .keys()
+                .any(|key| key.ends_with("/.quick-manifest.json"))
+        );
     }
 
     fn handle_s3_request(stream: &mut TcpStream, objects: &mut HashMap<String, Vec<u8>>) {

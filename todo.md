@@ -14,6 +14,8 @@
 
 ## Hébergement
 
+- [x] Listing automatique des fichiers sans `index.html`
+- [x] Rendu des fichiers JSX
 - [ ] HTTPS automatique
 - [ ] Domaines personnalisés et gestion DNS
 - [ ] CDN et cache configurable

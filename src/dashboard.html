@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="quick-bundle" content="quick-dashboard-bundle-v1">
-    <title>Quick — publier sans attendre</title>
+    <meta name="quick-language" content="en">
+    <title>Quick — publish without waiting</title>
     <style>
       :root {
         --ink: #25211d;
@@ -103,6 +104,38 @@
         border-radius: 50%;
         background: #6f9b63;
         box-shadow: 0 0 0 4px rgba(111, 155, 99, .12);
+      }
+      .header-tools {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+      }
+      .language-switcher {
+        display: flex;
+        gap: 3px;
+        padding: 3px;
+        border: 2px solid var(--quick-ink);
+        border-radius: 7px;
+        background: white;
+        box-shadow: 3px 3px 0 var(--quick-ink);
+      }
+      .language-switcher button {
+        width: auto;
+        padding: 5px 7px;
+        border-radius: 3px;
+        background: transparent;
+        color: var(--quick-ink);
+        box-shadow: none;
+        font: 800 9px "SFMono-Regular", Consolas, monospace;
+      }
+      .language-switcher button:hover:not(:disabled) {
+        background: var(--quick-green);
+        box-shadow: none;
+        transform: none;
+      }
+      .language-switcher button[aria-pressed="true"] {
+        background: var(--quick-ink);
+        color: white;
       }
       main {
         flex: 1;
@@ -588,54 +621,66 @@
     <div class="shell">
       <header>
         <div class="brand"><span class="mark">Q</span> Quick</div>
-        <div class="status"><span>prêt à publier</span></div>
+        <div class="header-tools">
+          <div class="status"><span data-i18n="status">ready to publish</span></div>
+          <div class="language-switcher" aria-label="Language">
+            <button type="button" data-language="en" aria-pressed="true">EN</button>
+            <button type="button" data-language="fr" aria-pressed="false">FR</button>
+          </div>
+        </div>
       </header>
       <main>
         <section class="intro">
           <p class="eyebrow">Quick hosting</p>
           <h1>Drop.<br><em>Ship.</em></h1>
-          <p class="lede">Un dossier ou un ZIP, un nom, et votre site est en ligne. Rien d’autre à configurer.</p>
+          <p class="lede" data-i18n="lede">Files, a folder or a ZIP, a name, and your site is live. Nothing else to configure.</p>
         </section>
 
         <form class="workspace" id="deploy-form">
-          <div class="drop" id="drop-zone" role="button" tabindex="0" aria-label="Déposer ou sélectionner un dossier">
-            <span class="drop-number">Fichiers</span>
+          <div class="drop" id="drop-zone" role="button" tabindex="0" aria-label="Drop or select files" data-i18n-aria-label="dropAria">
+            <span class="drop-number" data-i18n="filesLabel">Files</span>
             <span class="drop-copy">
               <span class="drop-icon">+</span>
-              <h2>Déposez votre site</h2>
+              <h2 data-i18n="dropTitle">Drop your files</h2>
               <p class="drop-hint">
-                un dossier ici, ou
-                <button class="zip-picker" id="zip-picker" type="button">un fichier ZIP</button><br>
-                25 Mo décompressés maximum
+                <span data-i18n="chooseFiles">choose files,</span>
+                <button class="zip-picker" id="folder-picker" type="button" data-i18n="folderChoice">a folder</button>
+                <span data-i18n="or">or</span>
+                <button class="zip-picker" id="zip-picker" type="button" data-i18n="zipChoice">a ZIP</button><br>
+                <span data-i18n="sizeLimit">25 MB uncompressed maximum</span>
               </p>
-              <p class="file-meta" id="file-meta">En attente de fichiers</p>
+              <p class="file-meta" id="file-meta">Waiting for files</p>
             </span>
           </div>
-          <input id="files" type="file" multiple webkitdirectory aria-label="Sélectionner un dossier">
-          <input id="zip-file" type="file" accept=".zip,application/zip" aria-label="Sélectionner une archive ZIP">
+          <input id="files" type="file" multiple aria-label="Select files" data-i18n-aria-label="selectFiles">
+          <input id="folder-files" type="file" multiple webkitdirectory aria-label="Select a folder" data-i18n-aria-label="selectFolder">
+          <input id="zip-file" type="file" accept=".zip,application/zip" aria-label="Select a ZIP archive" data-i18n-aria-label="selectZip">
 
           <section class="config">
-            <span class="drop-number">Adresse</span>
-            <label for="hostname">Votre adresse</label>
+            <span class="drop-number" data-i18n="addressLabel">Address</span>
+            <label for="hostname" data-i18n="addressTitle">Your address</label>
             <div class="host-row">
-              <input id="hostname" name="hostname" placeholder="mon-projet" maxlength="63" autocomplete="off" spellcheck="false">
+              <input id="hostname" name="hostname" placeholder="my-project" data-i18n-placeholder="hostnamePlaceholder" maxlength="63" autocomplete="off" spellcheck="false">
               <span class="suffix" id="suffix"></span>
             </div>
             <ul class="rules">
-              <li>minuscules, chiffres, tirets</li>
-              <li>index.html requis</li>
-              <li>redéployer remplace</li>
+              <li data-i18n="ruleHostname">lowercase, numbers, hyphens</li>
+              <li data-i18n="ruleListing">file listing without index.html</li>
+              <li data-i18n="ruleJsx">JSX rendering</li>
+              <li data-i18n="ruleReplace">redeploy replaces</li>
             </ul>
-            <button id="deploy" type="submit" disabled><span>Publier maintenant</span><span>↗</span></button>
+            <button id="deploy" type="submit" disabled><span data-i18n="publish">Publish now</span><span>↗</span></button>
             <p class="message" id="message" aria-live="polite"></p>
           </section>
         </form>
       </main>
-      <footer><span>Rust × Pingora</span><span>Simple, local, rapide</span></footer>
+      <footer><span>Rust × Pingora</span><span data-i18n="footer">Simple, local, fast</span></footer>
     </div>
     <script>
       const form = document.querySelector("#deploy-form");
       const input = document.querySelector("#files");
+      const folderInput = document.querySelector("#folder-files");
+      const folderPicker = document.querySelector("#folder-picker");
       const zipInput = document.querySelector("#zip-file");
       const zipPicker = document.querySelector("#zip-picker");
       const drop = document.querySelector("#drop-zone");
@@ -644,13 +689,136 @@
       const meta = document.querySelector("#file-meta");
       const message = document.querySelector("#message");
       const suffix = document.querySelector("#suffix");
+      const languageButtons = [...document.querySelectorAll("[data-language]")];
+      const browserLanguage = document.querySelector('meta[name="quick-language"]').content;
       let selected = [];
+      let selectedKind = "files";
+      let currentLanguage = "en";
+
+      const translations = {
+        en: {
+          title: "Quick — publish without waiting",
+          status: "ready to publish",
+          lede: "Files, a folder or a ZIP, a name, and your site is live. Nothing else to configure.",
+          dropAria: "Drop or select files",
+          filesLabel: "Files",
+          dropTitle: "Drop your files",
+          chooseFiles: "choose files,",
+          folderChoice: "a folder",
+          or: "or",
+          zipChoice: "a ZIP",
+          sizeLimit: "25 MB uncompressed maximum",
+          selectFiles: "Select files",
+          selectFolder: "Select a folder",
+          selectZip: "Select a ZIP archive",
+          addressLabel: "Address",
+          addressTitle: "Your address",
+          hostnamePlaceholder: "my-project",
+          ruleHostname: "lowercase, numbers, hyphens",
+          ruleListing: "file listing without index.html",
+          ruleJsx: "JSX rendering",
+          ruleReplace: "redeploy replaces",
+          publish: "Publish now",
+          footer: "Simple, local, fast",
+          waiting: "Waiting for files",
+          noFiles: "No files selected",
+          zipArchive: "ZIP archive",
+          file: "file",
+          files: "files",
+          preparing: "Preparing and uploading files…",
+          deployFailed: "Deployment failed.",
+          live: "Live → "
+        },
+        fr: {
+          title: "Quick — publier sans attendre",
+          status: "prêt à publier",
+          lede: "Des fichiers, un dossier ou un ZIP, un nom, et votre site est en ligne. Rien d’autre à configurer.",
+          dropAria: "Déposer ou sélectionner des fichiers",
+          filesLabel: "Fichiers",
+          dropTitle: "Déposez vos fichiers",
+          chooseFiles: "choisissez des fichiers,",
+          folderChoice: "un dossier",
+          or: "ou",
+          zipChoice: "un ZIP",
+          sizeLimit: "25 Mo décompressés maximum",
+          selectFiles: "Sélectionner des fichiers",
+          selectFolder: "Sélectionner un dossier",
+          selectZip: "Sélectionner une archive ZIP",
+          addressLabel: "Adresse",
+          addressTitle: "Votre adresse",
+          hostnamePlaceholder: "mon-projet",
+          ruleHostname: "minuscules, chiffres, tirets",
+          ruleListing: "listing sans index.html",
+          ruleJsx: "JSX rendu",
+          ruleReplace: "redéployer remplace",
+          publish: "Publier maintenant",
+          footer: "Simple, local, rapide",
+          waiting: "En attente de fichiers",
+          noFiles: "Aucun fichier sélectionné",
+          zipArchive: "Archive ZIP",
+          file: "fichier",
+          files: "fichiers",
+          preparing: "Préparation et envoi des fichiers…",
+          deployFailed: "Le déploiement a échoué.",
+          live: "En ligne → "
+        }
+      };
 
       suffix.textContent = "." + location.hostname;
 
-      const formatSize = bytes => bytes < 1e6
-        ? Math.ceil(bytes / 1e3) + " Ko"
-        : (bytes / 1e6).toFixed(1) + " Mo";
+      const t = key => translations[currentLanguage][key];
+
+      const formatSize = bytes => {
+        const units = currentLanguage === "fr" ? ["Ko", "Mo"] : ["kB", "MB"];
+        return bytes < 1e6
+          ? Math.ceil(bytes / 1e3) + " " + units[0]
+          : (bytes / 1e6).toFixed(1) + " " + units[1];
+      };
+
+      function updateFileMeta() {
+        if (!selected.length) {
+          meta.textContent = t("waiting");
+          return;
+        }
+        const size = selected.reduce((total, item) => total + item.file.size, 0);
+        if (selectedKind === "zip") {
+          meta.textContent = `${t("zipArchive")} · ${formatSize(size)}`;
+          return;
+        }
+        const label = selected.length === 1 ? t("file") : t("files");
+        meta.textContent = `${selected.length} ${label} · ${formatSize(size)}`;
+      }
+
+      function applyLanguage(language) {
+        currentLanguage = translations[language] ? language : "en";
+        document.documentElement.lang = currentLanguage;
+        document.title = t("title");
+        document.querySelectorAll("[data-i18n]").forEach(element => {
+          element.textContent = t(element.dataset.i18n);
+        });
+        document.querySelectorAll("[data-i18n-aria-label]").forEach(element => {
+          element.setAttribute("aria-label", t(element.dataset.i18nAriaLabel));
+        });
+        document.querySelectorAll("[data-i18n-placeholder]").forEach(element => {
+          element.setAttribute("placeholder", t(element.dataset.i18nPlaceholder));
+        });
+        languageButtons.forEach(button => {
+          button.setAttribute("aria-pressed", String(button.dataset.language === currentLanguage));
+        });
+        updateFileMeta();
+        try {
+          localStorage.setItem("quick-language", currentLanguage);
+        } catch (_) {}
+      }
+
+      languageButtons.forEach(button => {
+        button.addEventListener("click", () => applyLanguage(button.dataset.language));
+      });
+      try {
+        applyLanguage(localStorage.getItem("quick-language") || browserLanguage);
+      } catch (_) {
+        applyLanguage(browserLanguage);
+      }
 
       function commonRoot(files) {
         const paths = files.map(file => file.path.split("/"));
@@ -662,18 +830,18 @@
       function setFiles(files) {
         const isZip = files.length === 1 && files[0].file.name.toLowerCase().endsWith(".zip");
         if (isZip) {
+          selectedKind = "zip";
           selected = [{ file: files[0].file, path: files[0].file.name }];
-          meta.textContent = `Archive ZIP · ${formatSize(files[0].file.size)}`;
+          updateFileMeta();
           validate();
           return;
         }
+        selectedKind = "files";
         const root = commonRoot(files);
         selected = files.map(file => ({ file: file.file, path: file.path.slice(root.length) }))
-          .filter(file => file.path && !file.path.startsWith("."));
-        const size = selected.reduce((total, item) => total + item.file.size, 0);
-        meta.textContent = selected.length
-          ? `${selected.length} fichier${selected.length > 1 ? "s" : ""} · ${formatSize(size)}`
-          : "Aucun fichier sélectionné";
+          .filter(file => file.path);
+        meta.textContent = selected.length ? "" : t("noFiles");
+        if (selected.length) updateFileMeta();
         validate();
       }
 
@@ -686,6 +854,9 @@
       input.addEventListener("change", () => setFiles(
         [...input.files].map(file => ({ file, path: file.webkitRelativePath || file.name }))
       ));
+      folderInput.addEventListener("change", () => setFiles(
+        [...folderInput.files].map(file => ({ file, path: file.webkitRelativePath || file.name }))
+      ));
       drop.addEventListener("click", () => input.click());
       drop.addEventListener("keydown", event => {
         if (event.key === "Enter" || event.key === " ") {
@@ -696,6 +867,10 @@
       zipPicker.addEventListener("click", event => {
         event.stopPropagation();
         zipInput.click();
+      });
+      folderPicker.addEventListener("click", event => {
+        event.stopPropagation();
+        folderInput.click();
       });
       zipInput.addEventListener("change", () => setFiles(
         [...zipInput.files].map(file => ({ file, path: file.name }))
@@ -745,7 +920,7 @@
         event.preventDefault();
         button.disabled = true;
         message.className = "message";
-        message.textContent = "Préparation et envoi des fichiers…";
+        message.textContent = t("preparing");
         try {
           const files = await Promise.all(selected.map(async item => ({
             path: item.path,
@@ -757,9 +932,9 @@
             body: JSON.stringify({ hostname: hostname.value, files })
           });
           const result = await response.json();
-          if (!response.ok) throw new Error(result.error || "Le déploiement a échoué.");
+          if (!response.ok) throw new Error(result.error || t("deployFailed"));
           message.className = "message success";
-          message.replaceChildren("En ligne → ");
+          message.replaceChildren(t("live"));
           const link = document.createElement("a");
           link.href = result.url;
           link.target = "_blank";

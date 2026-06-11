@@ -1,70 +1,80 @@
 # Quick
 
-Une implémentation Rust/Pingora du noyau de
-[Shopify Quick](https://shopify.engineering/quick): déposer un dossier HTML et
-obtenir immédiatement un site adressable par sous-domaine.
+A Rust/Pingora implementation of the core idea behind
+[Shopify Quick](https://shopify.engineering/quick): drop files and immediately
+get a site available through its own subdomain.
 
-## Fonctionnalités
+## Features
 
-- remplacement transactionnel d'un dossier statique avec restauration sur erreur;
-- homepage de déploiement avec sélection ou drag-and-drop d'un dossier;
-- upload d'archives ZIP avec extraction sécurisée;
-- homepage entièrement embarquée dans le binaire, sans asset externe;
-- configuration du hostname et retour immédiat de l'URL publiée;
-- routage `<site>.<domaine>` avec Pingora;
-- fichiers `index.html` pour les répertoires;
-- fallback `index.html` pour les applications monopage;
-- détection MIME;
-- refus des liens symboliques et des traversées de chemin.
-- stockage local ou S3 compatible avec publications atomiques.
+- transactional static-site replacement with rollback on failure;
+- deployment homepage with file selection and drag-and-drop;
+- English/French homepage selected through `Accept-Language`, with English as
+  the fallback and a persistent manual language switcher;
+- secure ZIP upload and extraction;
+- homepage fully embedded in the executable, with no external asset required;
+- hostname configuration with immediate access to the published URL;
+- Pingora routing through `<site>.<domain>`;
+- directory `index.html` support;
+- `index.html` fallback for single-page applications;
+- automatic file listing when no root `index.html` exists;
+- browser-side React and Babel rendering for `.jsx` components;
+- MIME type detection;
+- rejection of symbolic links and path traversal attempts;
+- local or S3-compatible storage with atomic releases.
 
-Quick n'implémente pas encore les API de base de données, fichiers, IA,
-entrepôt de données, WebSockets ou identité.
+Quick does not yet implement the database, file, AI, data warehouse,
+WebSocket, or identity APIs described by Shopify.
 
-## Démarrage
+## Getting Started
 
 ```sh
 cargo build
 cargo run -- serve
 ```
 
-Ouvrir <http://localhost:8080>, choisir un dossier contenant un `index.html`,
-puis définir son hostname. Le site sera disponible sur
+Open <http://localhost:8080>, select files, a directory, or a ZIP archive, then
+choose a hostname. The site will be available at
 `http://<hostname>.localhost:8080`.
 
-La homepage accepte aussi une archive ZIP. Si tous ses fichiers se trouvent
-dans un même dossier racine, ce dossier est retiré automatiquement. Les
-archives sont limitées à 1 000 entrées et 25 Mo décompressés; les chemins
-sortants, liens symboliques et fichiers chiffrés sont refusés.
+When every file in a ZIP archive is stored under one root directory, Quick
+automatically strips that directory. Archives are limited to 1,000 entries and
+25 MiB of uncompressed content. Escaping paths, symbolic links, and encrypted
+files are rejected.
 
-Le déploiement en ligne de commande reste disponible:
+All file types are accepted. When the root does not contain an `index.html`,
+Quick displays a listing with a link to every uploaded file. Opening a `.jsx`
+file renders its default React export. A file containing only a JSX expression
+is also supported. JSX rendering loads React and Babel from public CDNs, so the
+browser needs Internet access.
+
+Command-line deployments remain available:
 
 ```sh
 cargo run -- deploy examples/hello --site hello
 ```
 
-Ouvrir ensuite <http://hello.localhost:8080>. Les navigateurs modernes
-résolvent généralement `*.localhost` vers `127.0.0.1`. Sinon:
+Then open <http://hello.localhost:8080>. Modern browsers usually resolve
+`*.localhost` to `127.0.0.1`. Otherwise:
 
 ```sh
 curl -H 'Host: hello.localhost' http://127.0.0.1:8080/
 ```
 
-Options utiles:
+Useful options:
 
 ```sh
 quick serve --listen 0.0.0.0:8080 --sites-dir ./sites --base-domain quick.internal
-quick deploy ./dist --site mon-site --sites-dir ./sites
+quick deploy ./dist --site my-site --sites-dir ./sites
 ```
 
-## Stockage S3
+## S3 Storage
 
-Quick peut stocker les sites dans AWS S3 ou un service compatible comme MinIO,
-Cloudflare R2 ou Backblaze B2. Chaque déploiement est écrit sous un préfixe de
-release immuable, puis publié en remplaçant `current.json`.
+Quick can store sites in AWS S3 or a compatible service such as MinIO,
+Cloudflare R2, or Backblaze B2. Each deployment is written under an immutable
+release prefix and published by replacing `current.json`.
 
-Les identifiants suivent la chaîne standard AWS (`AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, profils et rôles d'instance).
+Credentials use the standard AWS credential chain: `AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, profiles, and instance roles.
 
 AWS S3:
 
@@ -75,7 +85,7 @@ quick serve \
   --s3-region eu-west-1
 ```
 
-MinIO ou autre endpoint compatible:
+MinIO or another compatible endpoint:
 
 ```sh
 AWS_ACCESS_KEY_ID=minio \
@@ -88,11 +98,11 @@ quick serve \
   --s3-path-style
 ```
 
-Les options ont aussi des variables `QUICK_STORAGE`, `QUICK_S3_BUCKET`,
-`QUICK_S3_REGION`, `QUICK_S3_ENDPOINT`, `QUICK_S3_PREFIX` et
-`QUICK_S3_PATH_STYLE`. Le bucket doit exister avant le démarrage.
+The options are also available through `QUICK_STORAGE`, `QUICK_S3_BUCKET`,
+`QUICK_S3_REGION`, `QUICK_S3_ENDPOINT`, `QUICK_S3_PREFIX`, and
+`QUICK_S3_PATH_STYLE`. The bucket must exist before Quick starts.
 
-Politique IAM minimale pour le préfixe par défaut:
+Minimum IAM policy for the default prefix:
 
 ```json
 {
@@ -105,14 +115,14 @@ Politique IAM minimale pour le préfixe par défaut:
 }
 ```
 
-Les anciennes releases restent immuables dans le bucket. Configurer une règle
-de cycle de vie S3 sur `quick/sites/*/releases/` pour les supprimer selon la
-durée de rétention souhaitée.
+Previous releases remain immutable in the bucket. Configure an S3 lifecycle
+rule for `quick/sites/*/releases/` to delete them after the desired retention
+period.
 
-En production, placer le service derrière un proxy d'identité (IAP, oauth2-proxy
-ou équivalent), comme dans l'architecture Shopify. Quick sert volontairement
-HTTP sans authentification ni TLS. La homepage permet donc à toute personne qui
-peut joindre le serveur de créer ou remplacer un site.
+In production, place Quick behind an identity-aware proxy such as IAP or
+oauth2-proxy, as in Shopify's architecture. Quick intentionally serves plain
+HTTP without authentication or TLS. Anyone who can reach the homepage can
+therefore create or replace a site.
 
 ## Architecture
 
@@ -121,11 +131,11 @@ quick deploy ./dist --site demo
              |
              v
  local: sites/demo/*
-   ou
+   or
  S3: quick/sites/demo/releases/<id>/*
              |
              v
-demo.localhost -> Pingora -> fichier statique
+demo.localhost -> Pingora -> static file
 ```
 
 ## Tests
@@ -136,24 +146,24 @@ cargo test
 
 ## Releases
 
-Les tags sémantiques `vX.Y.Z` déclenchent le workflow GitHub Actions de release.
-La version du tag doit correspondre à celle de `Cargo.toml`.
+Semantic tags matching `vX.Y.Z` trigger the GitHub Actions release workflow.
+The tag version must match the version in `Cargo.toml`.
 
 ```sh
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Après les vérifications (`fmt`, Clippy et tests), GitHub publie une release avec:
+After formatting, Clippy, and test checks, GitHub publishes a release with:
 
 - Linux x86_64;
 - macOS Intel;
 - macOS Apple Silicon;
-- une somme SHA-256 pour chaque archive.
+- a SHA-256 checksum for each archive.
 
-Le workflow peut aussi être lancé manuellement depuis GitHub Actions; dans ce
-cas, il compile et conserve les artefacts sans créer de GitHub Release.
+The workflow can also be started manually from GitHub Actions. In that case,
+it builds and stores the artifacts without creating a GitHub Release.
 
-Chaque build vérifie que la homepage est présente dans le binaire final. Le job
-Linux lance également une copie isolée de l'exécutable depuis un dossier vide
-et contrôle que la page d'administration répond sans fichier annexe.
+Every build checks that the homepage is embedded in the final executable. The
+Linux job also runs an isolated copy of the executable from an empty directory
+and verifies that the administration page works without companion files.

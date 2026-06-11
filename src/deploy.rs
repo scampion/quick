@@ -4,7 +4,16 @@ use std::io::{self, Cursor, Read};
 use std::path::{Component, Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use serde::{Deserialize, Serialize};
+
 use crate::hosting::valid_site_name;
+
+pub const MANIFEST_PATH: &str = ".quick-manifest.json";
+
+#[derive(Deserialize, Serialize)]
+pub struct SiteManifest {
+    pub files: Vec<String>,
+}
 
 pub fn deploy(source: &Path, sites_dir: &Path, site: &str) -> io::Result<()> {
     if !valid_site_name(site) {
@@ -19,23 +28,7 @@ pub fn deploy(source: &Path, sites_dir: &Path, site: &str) -> io::Result<()> {
             "source must be a directory",
         ));
     }
-    if !source.join("index.html").is_file() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "source must contain an index.html file",
-        ));
-    }
-
-    let staging = create_staging_dir(sites_dir, site)?;
-
-    if let Err(error) =
-        copy_directory(source, &staging).and_then(|_| promote(&staging, sites_dir, site))
-    {
-        let _ = fs::remove_dir_all(&staging);
-        return Err(error);
-    }
-
-    Ok(())
+    deploy_files(read_directory(source)?, sites_dir, site)
 }
 
 pub fn read_directory(source: &Path) -> io::Result<Vec<(PathBuf, Vec<u8>)>> {
@@ -64,8 +57,7 @@ pub fn deploy_files(
         ));
     }
 
-    let files: Vec<_> = files.into_iter().collect();
-    validate_files(&files)?;
+    let files = prepare_files(files.into_iter().collect())?;
     let staging = create_staging_dir(sites_dir, site)?;
     let result = (|| {
         for (relative_path, content) in files {
@@ -200,11 +192,18 @@ pub fn extract_zip_files(
 }
 
 pub fn validate_files(files: &[(PathBuf, Vec<u8>)]) -> io::Result<()> {
-    let mut has_index = false;
+    if files.is_empty() {
+        return Err(invalid_input("upload must contain at least one file"));
+    }
+
     let mut seen = HashSet::with_capacity(files.len());
     for (path, _) in files {
         let path = safe_upload_path(path)?;
-        has_index |= path == Path::new("index.html");
+        if path == Path::new(MANIFEST_PATH) {
+            return Err(invalid_input(format!(
+                "{MANIFEST_PATH} is reserved by Quick"
+            )));
+        }
         if !seen.insert(path.to_path_buf()) {
             return Err(invalid_input(format!(
                 "duplicate upload path: {}",
@@ -212,13 +211,20 @@ pub fn validate_files(files: &[(PathBuf, Vec<u8>)]) -> io::Result<()> {
             )));
         }
     }
-
-    if !has_index {
-        return Err(invalid_input(
-            "upload must contain an index.html file at its root",
-        ));
-    }
     Ok(())
+}
+
+pub fn prepare_files(mut files: Vec<(PathBuf, Vec<u8>)>) -> io::Result<Vec<(PathBuf, Vec<u8>)>> {
+    validate_files(&files)?;
+    let mut paths: Vec<_> = files
+        .iter()
+        .map(|(path, _)| path.to_string_lossy().replace('\\', "/"))
+        .collect();
+    paths.sort();
+    let manifest = serde_json::to_vec(&SiteManifest { files: paths })
+        .map_err(|error| io::Error::other(format!("could not encode site manifest: {error}")))?;
+    files.push((PathBuf::from(MANIFEST_PATH), manifest));
+    Ok(files)
 }
 
 fn common_archive_root(paths: &[PathBuf]) -> Option<PathBuf> {
@@ -302,30 +308,6 @@ fn safe_upload_path(path: &Path) -> io::Result<&Path> {
     })
 }
 
-fn copy_directory(source: &Path, destination: &Path) -> io::Result<()> {
-    for entry in fs::read_dir(source)? {
-        let entry = entry?;
-        let file_type = entry.file_type()?;
-        let target = destination.join(entry.file_name());
-
-        if file_type.is_symlink() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "symbolic links are not supported: {}",
-                    entry.path().display()
-                ),
-            ));
-        } else if file_type.is_dir() {
-            copy_directory(&entry.path(), &target)?;
-        } else if file_type.is_file() {
-            fs::copy(entry.path(), target)?;
-        }
-    }
-
-    Ok(())
-}
-
 fn collect_directory(
     root: &Path,
     directory: &Path,
@@ -396,13 +378,22 @@ mod tests {
     }
 
     #[test]
-    fn requires_an_index_file() {
+    fn deploys_a_directory_without_an_index_file() {
         let temp = tempfile::tempdir().unwrap();
         let source = temp.path().join("source");
         fs::create_dir(&source).unwrap();
+        fs::write(source.join("notes.txt"), "hello").unwrap();
 
-        let error = deploy(&source, &temp.path().join("sites"), "demo").unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        deploy(&source, &temp.path().join("sites"), "demo").unwrap();
+        assert_eq!(
+            fs::read_to_string(temp.path().join("sites/demo/notes.txt")).unwrap(),
+            "hello"
+        );
+        let manifest: SiteManifest = serde_json::from_slice(
+            &fs::read(temp.path().join("sites/demo/.quick-manifest.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(manifest.files, ["notes.txt"]);
     }
 
     #[test]
@@ -456,6 +447,21 @@ mod tests {
             fs::read_to_string(sites.join("zip-site/assets/app.js")).unwrap(),
             "zip app"
         );
+    }
+
+    #[test]
+    fn accepts_zip_archives_without_an_index_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let sites = temp.path().join("sites");
+        let archive = make_zip(&[
+            ("my-files/readme.md", b"hello"),
+            ("my-files/App.jsx", b"export default () => <h1>Hello</h1>"),
+        ]);
+
+        deploy_zip(archive, &sites, "files", 100, 1024 * 1024).unwrap();
+
+        assert!(sites.join("files/readme.md").is_file());
+        assert!(sites.join("files/App.jsx").is_file());
     }
 
     #[test]
