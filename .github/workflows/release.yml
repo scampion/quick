@@ -55,6 +55,28 @@ jobs:
       - name: Run tests
         run: cargo test --locked
 
+      - name: Verify standalone release binary
+        shell: bash
+        run: |
+          cargo build --release --locked
+          bundle="$(mktemp -d)"
+          cp target/release/quick "$bundle/quick"
+          cd "$bundle"
+          ./quick serve --listen 127.0.0.1:18080 >quick.log 2>&1 &
+          quick_pid=$!
+          trap 'kill "$quick_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..20}; do
+            if curl --fail --silent \
+              --header "Host: localhost:18080" \
+              http://127.0.0.1:18080/ >homepage.html; then
+              break
+            fi
+            sleep 0.25
+          done
+          grep --fixed-strings "quick-dashboard-bundle-v1" homepage.html
+          test ! -e dashboard.html
+          test ! -d src
+
   build:
     name: Build ${{ matrix.target }}
     needs: verify
@@ -90,6 +112,13 @@ jobs:
 
       - name: Build release binary
         run: cargo build --release --locked --target "${{ matrix.target }}"
+
+      - name: Verify dashboard is embedded
+        shell: bash
+        run: |
+          LC_ALL=C grep -a -q -F \
+            "quick-dashboard-bundle-v1" \
+            "target/${{ matrix.target }}/release/quick"
 
       - name: Package archive
         shell: bash

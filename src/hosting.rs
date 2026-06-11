@@ -340,6 +340,15 @@ mod tests {
     use super::*;
 
     #[test]
+    fn dashboard_is_compiled_into_the_application() {
+        assert!(DASHBOARD.contains("quick-dashboard-bundle-v1"));
+        assert!(!DASHBOARD.contains("@import"));
+        assert!(!DASHBOARD.contains("<script src="));
+        assert!(!DASHBOARD.contains("<link "));
+        assert!(!DASHBOARD.contains("<img "));
+    }
+
+    #[test]
     fn extracts_site_from_host() {
         assert_eq!(
             site_from_host("demo.localhost:8080", "localhost"),

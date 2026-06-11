@@ -3,10 +3,9 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="quick-bundle" content="quick-dashboard-bundle-v1">
     <title>Quick — publier sans attendre</title>
     <style>
-      @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap');
-
       :root {
         --ink: #161a17;
         --paper: #f0efe8;
@@ -24,7 +23,7 @@
         background:
           linear-gradient(90deg, transparent 49.8%, rgba(22, 26, 23, .035) 50%, transparent 50.2%),
           var(--paper);
-        font-family: "Manrope", sans-serif;
+        font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
       }
       body::before {
         content: "";
@@ -46,7 +45,7 @@
       .mark {
         width: 34px; height: 34px; display: grid; place-items: center;
         background: var(--ink); color: var(--acid); border-radius: 50%;
-        font: 500 17px "DM Mono", monospace;
+        font: 500 17px "SFMono-Regular", Consolas, monospace;
       }
       .status { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
       .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #27a85f; box-shadow: 0 0 0 4px rgba(39,168,95,.12); }
@@ -55,7 +54,7 @@
         margin: 0 auto;
         padding: clamp(52px, 8vw, 110px) 0 70px;
       }
-      .eyebrow { margin: 0 0 22px; color: var(--blue); font: 500 12px "DM Mono", monospace; letter-spacing: .14em; text-transform: uppercase; }
+      .eyebrow { margin: 0 0 22px; color: var(--blue); font: 500 12px "SFMono-Regular", Consolas, monospace; letter-spacing: .14em; text-transform: uppercase; }
       h1 { max-width: 920px; margin: 0; font-size: clamp(48px, 8vw, 112px); line-height: .91; letter-spacing: -.065em; font-weight: 600; }
       h1 em { font-style: normal; color: var(--blue); }
       .lede { max-width: 590px; margin: 30px 0 56px auto; font-size: clamp(17px, 2vw, 22px); line-height: 1.55; color: var(--muted); }
@@ -67,11 +66,11 @@
       }
       .drop.dragging { background: var(--blue); color: white; }
       .drop.dragging .drop-hint, .drop.dragging .file-meta { color: rgba(255,255,255,.72); }
-      .drop-number { font: 500 12px "DM Mono", monospace; }
+      .drop-number { font: 500 12px "SFMono-Regular", Consolas, monospace; }
       .drop-icon { width: 74px; height: 74px; border: 1px solid currentColor; border-radius: 50%; display: grid; place-items: center; font-size: 35px; transition: transform .25s; }
       .drop:hover .drop-icon, .drop.dragging .drop-icon { transform: rotate(90deg); }
       .drop-copy h2 { margin: 0 0 10px; font-size: clamp(27px, 3vw, 42px); letter-spacing: -.04em; font-weight: 600; }
-      .drop-hint, .file-meta { margin: 0; color: var(--muted); font: 400 13px/1.6 "DM Mono", monospace; }
+      .drop-hint, .file-meta { margin: 0; color: var(--muted); font: 400 13px/1.6 "SFMono-Regular", Consolas, monospace; }
       .file-meta { margin-top: 14px; color: var(--blue); }
       input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
       .config { padding: 42px 34px; display: flex; flex-direction: column; }
@@ -79,21 +78,21 @@
       .host-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--ink); }
       .host-row input {
         min-width: 0; width: 100%; border: 0; background: transparent; padding: 13px 0;
-        color: var(--ink); outline: 0; font: 500 20px "DM Mono", monospace;
+        color: var(--ink); outline: 0; font: 500 20px "SFMono-Regular", Consolas, monospace;
       }
-      .suffix { display: flex; align-items: center; color: var(--muted); font: 400 12px "DM Mono", monospace; white-space: nowrap; }
-      .rules { margin: 22px 0 34px; padding: 0; list-style: none; color: var(--muted); font: 400 11px/1.9 "DM Mono", monospace; }
+      .suffix { display: flex; align-items: center; color: var(--muted); font: 400 12px "SFMono-Regular", Consolas, monospace; white-space: nowrap; }
+      .rules { margin: 22px 0 34px; padding: 0; list-style: none; color: var(--muted); font: 400 11px/1.9 "SFMono-Regular", Consolas, monospace; }
       button {
         width: 100%; border: 1px solid var(--ink); background: var(--acid); color: var(--ink);
-        padding: 18px 20px; font: 700 14px "Manrope", sans-serif; cursor: pointer;
+        padding: 18px 20px; font: 700 14px "Avenir Next", Avenir, "Segoe UI", sans-serif; cursor: pointer;
         display: flex; justify-content: space-between; transition: transform .15s, box-shadow .15s, opacity .15s;
       }
       button:hover:not(:disabled) { transform: translate(-3px, -3px); box-shadow: 3px 3px 0 var(--ink); }
       button:disabled { opacity: .42; cursor: not-allowed; }
-      .message { min-height: 22px; margin: 18px 0 0; font: 400 12px/1.5 "DM Mono", monospace; }
+      .message { min-height: 22px; margin: 18px 0 0; font: 400 12px/1.5 "SFMono-Regular", Consolas, monospace; }
       .message.error { color: #b22424; }
       .message.success a { color: var(--blue); font-weight: 500; }
-      footer { margin-top: 34px; display: flex; justify-content: space-between; color: var(--muted); font: 400 10px "DM Mono", monospace; text-transform: uppercase; letter-spacing: .08em; }
+      footer { margin-top: 34px; display: flex; justify-content: space-between; color: var(--muted); font: 400 10px "SFMono-Regular", Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
       @media (max-width: 760px) {
         .workspace { grid-template-columns: 1fr; box-shadow: 7px 7px 0 var(--ink); }
         .drop { min-height: 310px; border-right: 0; border-bottom: 1px solid var(--ink); padding: 28px; }
@@ -253,7 +252,13 @@
           const result = await response.json();
           if (!response.ok) throw new Error(result.error || "Le déploiement a échoué.");
           message.className = "message success";
-          message.innerHTML = `En ligne → <a href="${result.url}" target="_blank" rel="noopener">${result.url}</a>`;
+          message.replaceChildren("En ligne → ");
+          const link = document.createElement("a");
+          link.href = result.url;
+          link.target = "_blank";
+          link.rel = "noopener";
+          link.textContent = result.url;
+          message.append(link);
         } catch (error) {
           message.className = "message error";
           message.textContent = error.message;

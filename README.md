@@ -8,6 +8,7 @@ obtenir immédiatement un site adressable par sous-domaine.
 
 - remplacement transactionnel d'un dossier statique avec restauration sur erreur;
 - homepage de déploiement avec sélection ou drag-and-drop d'un dossier;
+- homepage entièrement embarquée dans le binaire, sans asset externe;
 - configuration du hostname et retour immédiat de l'URL publiée;
 - routage `<site>.<domaine>` avec Pingora;
 - fichiers `index.html` pour les répertoires;
@@ -91,3 +92,7 @@ Après les vérifications (`fmt`, Clippy et tests), GitHub publie une release av
 
 Le workflow peut aussi être lancé manuellement depuis GitHub Actions; dans ce
 cas, il compile et conserve les artefacts sans créer de GitHub Release.
+
+Chaque build vérifie que la homepage est présente dans le binaire final. Le job
+Linux lance également une copie isolée de l'exécutable depuis un dossier vide
+et contrôle que la page d'administration répond sans fichier annexe.
