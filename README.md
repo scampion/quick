@@ -1,10 +1,10 @@
-# Quick MVP
+# Quick
 
 Une implémentation Rust/Pingora du noyau de
 [Shopify Quick](https://shopify.engineering/quick): déposer un dossier HTML et
 obtenir immédiatement un site adressable par sous-domaine.
 
-## Fonctionnalités du MVP
+## Fonctionnalités
 
 - remplacement transactionnel d'un dossier statique avec restauration sur erreur;
 - homepage de déploiement avec sélection ou drag-and-drop d'un dossier;
@@ -18,7 +18,7 @@ obtenir immédiatement un site adressable par sous-domaine.
 - refus des liens symboliques et des traversées de chemin.
 - stockage local ou S3 compatible avec publications atomiques.
 
-Ce MVP n'implémente pas encore les API Quick de base de données, fichiers, IA,
+Quick n'implémente pas encore les API de base de données, fichiers, IA,
 entrepôt de données, WebSockets ou identité.
 
 ## Démarrage
@@ -110,7 +110,7 @@ de cycle de vie S3 sur `quick/sites/*/releases/` pour les supprimer selon la
 durée de rétention souhaitée.
 
 En production, placer le service derrière un proxy d'identité (IAP, oauth2-proxy
-ou équivalent), comme dans l'architecture Shopify. Le MVP sert volontairement
+ou équivalent), comme dans l'architecture Shopify. Quick sert volontairement
 HTTP sans authentification ni TLS. La homepage permet donc à toute personne qui
 peut joindre le serveur de créer ou remplacer un site.
 
