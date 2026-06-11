@@ -1,6 +1,16 @@
 # Quick
 
-A Rust/Pingora implementation of the core idea behind
+*[Version française](./README.fr.md)*
+
+Quick turns any folder, ZIP, or set of files into a live website in seconds:
+drop them in, pick a name, and your site is instantly online at its own
+address — no build step, no configuration, no servers to manage.
+
+In the age of generative AI, we produce ever more pages, prototypes, and small
+sites. Quick answers that need: hosting these ever-growing productions more
+easily and faster than ever.
+
+It is a Rust/Pingora implementation of the core idea behind
 [Shopify Quick](https://shopify.engineering/quick): drop files and immediately
 get a site available through its own subdomain with a single binary 
 
@@ -51,6 +61,11 @@ file renders its default React export. A file containing only a JSX expression
 is also supported. JSX rendering loads React and Babel from public CDNs, so the
 browser needs Internet access.
 
+Because Quick supports JSX natively, Claude artifacts — interactive React
+components generated directly by Claude — can be saved as `.jsx` files and
+deployed without any build step. Copy the artifact code, upload it, and it is
+immediately live under its own subdomain.
+
 Command-line deployments remain available:
 
 ```sh
@@ -70,6 +85,15 @@ Useful options:
 quick serve --listen 0.0.0.0:8080 --sites-dir ./sites --base-domain quick.internal
 quick deploy ./dist --site my-site --sites-dir ./sites
 ```
+
+## Security
+
+Quick serves plain HTTP without authentication or TLS. The whole server must be
+placed behind an Identity-Aware Proxy (IAP) — such as
+[Google Cloud IAP](https://cloud.google.com/iap) or
+[oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy) — whenever it is
+exposed beyond a trusted network. Anyone who can reach the homepage can create
+or replace a site.
 
 ## S3 Storage
 
@@ -122,11 +146,6 @@ Minimum IAM policy for the default prefix:
 Previous releases remain immutable in the bucket. Configure an S3 lifecycle
 rule for `quick/sites/*/releases/` to delete them after the desired retention
 period.
-
-In production, place Quick behind an identity-aware proxy such as IAP or
-oauth2-proxy, as in Shopify's architecture. Quick intentionally serves plain
-HTTP without authentication or TLS. Anyone who can reach the homepage can
-therefore create or replace a site.
 
 ## Architecture
 
