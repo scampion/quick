@@ -1,4 +1,5 @@
 /target
 /sites/*
 !/sites/.gitkeep
+.DS_Store
 
