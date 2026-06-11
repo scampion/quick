@@ -38,6 +38,20 @@ pub fn deploy(source: &Path, sites_dir: &Path, site: &str) -> io::Result<()> {
     Ok(())
 }
 
+pub fn read_directory(source: &Path) -> io::Result<Vec<(PathBuf, Vec<u8>)>> {
+    if !source.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "source must be a directory",
+        ));
+    }
+
+    let mut files = Vec::new();
+    collect_directory(source, source, &mut files)?;
+    validate_files(&files)?;
+    Ok(files)
+}
+
 pub fn deploy_files(
     files: impl IntoIterator<Item = (PathBuf, Vec<u8>)>,
     sites_dir: &Path,
@@ -50,25 +64,18 @@ pub fn deploy_files(
         ));
     }
 
+    let files: Vec<_> = files.into_iter().collect();
+    validate_files(&files)?;
     let staging = create_staging_dir(sites_dir, site)?;
     let result = (|| {
-        let mut has_index = false;
         for (relative_path, content) in files {
             let relative_path = safe_upload_path(&relative_path)?;
-            has_index |= relative_path == Path::new("index.html");
 
             let destination = staging.join(relative_path);
             if let Some(parent) = destination.parent() {
                 fs::create_dir_all(parent)?;
             }
             fs::write(destination, content)?;
-        }
-
-        if !has_index {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "upload must contain an index.html file at its root",
-            ));
         }
 
         promote(&staging, sites_dir, site)
@@ -82,6 +89,7 @@ pub fn deploy_files(
     Ok(())
 }
 
+#[cfg(test)]
 pub fn deploy_zip(
     archive_bytes: Vec<u8>,
     sites_dir: &Path,
@@ -89,6 +97,15 @@ pub fn deploy_zip(
     max_files: usize,
     max_uncompressed_bytes: usize,
 ) -> io::Result<()> {
+    let files = extract_zip_files(archive_bytes, max_files, max_uncompressed_bytes)?;
+    deploy_files(files, sites_dir, site)
+}
+
+pub fn extract_zip_files(
+    archive_bytes: Vec<u8>,
+    max_files: usize,
+    max_uncompressed_bytes: usize,
+) -> io::Result<Vec<(PathBuf, Vec<u8>)>> {
     let mut archive = zip::ZipArchive::new(Cursor::new(archive_bytes)).map_err(zip_error)?;
     if archive.len() > max_files {
         return Err(invalid_input(format!(
@@ -178,7 +195,30 @@ pub fn deploy_zip(
     if files.is_empty() {
         return Err(invalid_input("ZIP archive contains no files"));
     }
-    deploy_files(files, sites_dir, site)
+    validate_files(&files)?;
+    Ok(files)
+}
+
+pub fn validate_files(files: &[(PathBuf, Vec<u8>)]) -> io::Result<()> {
+    let mut has_index = false;
+    let mut seen = HashSet::with_capacity(files.len());
+    for (path, _) in files {
+        let path = safe_upload_path(path)?;
+        has_index |= path == Path::new("index.html");
+        if !seen.insert(path.to_path_buf()) {
+            return Err(invalid_input(format!(
+                "duplicate upload path: {}",
+                path.display()
+            )));
+        }
+    }
+
+    if !has_index {
+        return Err(invalid_input(
+            "upload must contain an index.html file at its root",
+        ));
+    }
+    Ok(())
 }
 
 fn common_archive_root(paths: &[PathBuf]) -> Option<PathBuf> {
@@ -283,6 +323,36 @@ fn copy_directory(source: &Path, destination: &Path) -> io::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn collect_directory(
+    root: &Path,
+    directory: &Path,
+    files: &mut Vec<(PathBuf, Vec<u8>)>,
+) -> io::Result<()> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "symbolic links are not supported: {}",
+                    entry.path().display()
+                ),
+            ));
+        } else if file_type.is_dir() {
+            collect_directory(root, &entry.path(), files)?;
+        } else if file_type.is_file() {
+            let relative_path = entry
+                .path()
+                .strip_prefix(root)
+                .map(Path::to_path_buf)
+                .map_err(|_| invalid_input("source file is outside the deployment root"))?;
+            files.push((relative_path, fs::read(entry.path())?));
+        }
+    }
     Ok(())
 }
 

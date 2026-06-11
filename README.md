@@ -16,6 +16,7 @@ obtenir immédiatement un site adressable par sous-domaine.
 - fallback `index.html` pour les applications monopage;
 - détection MIME;
 - refus des liens symboliques et des traversées de chemin.
+- stockage local ou S3 compatible avec publications atomiques.
 
 Ce MVP n'implémente pas encore les API Quick de base de données, fichiers, IA,
 entrepôt de données, WebSockets ou identité.
@@ -56,6 +57,58 @@ quick serve --listen 0.0.0.0:8080 --sites-dir ./sites --base-domain quick.intern
 quick deploy ./dist --site mon-site --sites-dir ./sites
 ```
 
+## Stockage S3
+
+Quick peut stocker les sites dans AWS S3 ou un service compatible comme MinIO,
+Cloudflare R2 ou Backblaze B2. Chaque déploiement est écrit sous un préfixe de
+release immuable, puis publié en remplaçant `current.json`.
+
+Les identifiants suivent la chaîne standard AWS (`AWS_ACCESS_KEY_ID`,
+`AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, profils et rôles d'instance).
+
+AWS S3:
+
+```sh
+quick serve \
+  --storage s3 \
+  --s3-bucket quick-sites \
+  --s3-region eu-west-1
+```
+
+MinIO ou autre endpoint compatible:
+
+```sh
+AWS_ACCESS_KEY_ID=minio \
+AWS_SECRET_ACCESS_KEY=minio-secret \
+quick serve \
+  --storage s3 \
+  --s3-bucket quick-sites \
+  --s3-region us-east-1 \
+  --s3-endpoint http://127.0.0.1:9000 \
+  --s3-path-style
+```
+
+Les options ont aussi des variables `QUICK_STORAGE`, `QUICK_S3_BUCKET`,
+`QUICK_S3_REGION`, `QUICK_S3_ENDPOINT`, `QUICK_S3_PREFIX` et
+`QUICK_S3_PATH_STYLE`. Le bucket doit exister avant le démarrage.
+
+Politique IAM minimale pour le préfixe par défaut:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": ["s3:GetObject", "s3:PutObject"],
+    "Resource": "arn:aws:s3:::quick-sites/quick/*"
+  }]
+}
+```
+
+Les anciennes releases restent immuables dans le bucket. Configurer une règle
+de cycle de vie S3 sur `quick/sites/*/releases/` pour les supprimer selon la
+durée de rétention souhaitée.
+
 En production, placer le service derrière un proxy d'identité (IAP, oauth2-proxy
 ou équivalent), comme dans l'architecture Shopify. Le MVP sert volontairement
 HTTP sans authentification ni TLS. La homepage permet donc à toute personne qui
@@ -67,7 +120,9 @@ peut joindre le serveur de créer ou remplacer un site.
 quick deploy ./dist --site demo
              |
              v
-       sites/demo/*
+ local: sites/demo/*
+   ou
+ S3: quick/sites/demo/releases/<id>/*
              |
              v
 demo.localhost -> Pingora -> fichier statique

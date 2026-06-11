@@ -50,7 +50,7 @@
 - [ ] Service `systemd` et conteneur Docker
 - [ ] Arrêt gracieux et redémarrage sans interruption
 - [ ] Déploiement multi-instance
-- [ ] Stockage partagé ou objet
+- [x] Stockage partagé ou objet (S3 compatible)
 - [ ] Limitation de débit et protection anti-abus
 - [ ] Analyse antivirus des fichiers
 - [ ] Tests end-to-end navigateur

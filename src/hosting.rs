@@ -1,4 +1,3 @@
-use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use async_trait::async_trait;
@@ -9,6 +8,7 @@ use pingora::protocols::http::ServerSession;
 use serde::{Deserialize, Serialize};
 
 use crate::deploy;
+use crate::storage::SharedStorage;
 
 const DASHBOARD: &str = include_str!("dashboard.html");
 const MAX_REQUEST_BYTES: usize = 35 * 1024 * 1024;
@@ -38,19 +38,19 @@ struct ErrorResponse<'a> {
 }
 
 pub struct StaticHost {
-    sites_dir: PathBuf,
+    storage: SharedStorage,
     base_domain: String,
 }
 
 impl StaticHost {
-    pub fn new(sites_dir: PathBuf, base_domain: String) -> Self {
+    pub fn new(storage: SharedStorage, base_domain: String) -> Self {
         Self {
-            sites_dir,
+            storage,
             base_domain: base_domain.trim_end_matches('.').to_ascii_lowercase(),
         }
     }
 
-    fn static_response(&self, host: &str, request_path: &str) -> Response<Vec<u8>> {
+    async fn static_response(&self, host: &str, request_path: &str) -> Response<Vec<u8>> {
         let Some(site) = site_from_host(host, &self.base_domain) else {
             return text_response(404, "No site matches this host. Use <site>.<base-domain>.");
         };
@@ -58,35 +58,14 @@ impl StaticHost {
             return text_response(400, "Invalid path.");
         };
 
-        let site_root = self.sites_dir.join(site);
-        let requested = site_root.join(&relative_path);
-        let path = if requested.is_dir() {
-            requested.join("index.html")
-        } else if requested.is_file() {
-            requested
-        } else {
-            // Client-side applications can handle routes that have no file extension.
-            let is_spa_route = Path::new(request_path).extension().is_none();
-            if is_spa_route {
-                site_root.join("index.html")
-            } else {
-                requested
+        for candidate in asset_candidates(&relative_path, request_path) {
+            match self.storage.get(&site, &candidate).await {
+                Ok(Some(object)) => return response(200, &object.content_type, object.body),
+                Ok(None) => {}
+                Err(_) => return text_response(500, "Could not read the requested asset."),
             }
-        };
-
-        match fs::read(&path) {
-            Ok(body) => {
-                let content_type = mime_guess::from_path(&path)
-                    .first_or_octet_stream()
-                    .essence_str()
-                    .to_owned();
-                response(200, &content_type, body)
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                text_response(404, "Site or asset not found.")
-            }
-            Err(_) => text_response(500, "Could not read the requested asset."),
         }
+        text_response(404, "Site or asset not found.")
     }
 
     async fn deploy_response(
@@ -138,23 +117,20 @@ impl StaticHost {
                 .0
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("zip"));
-        let deployment = if is_zip {
+        let files = if is_zip {
             let (_, archive) = files.pop().expect("one ZIP file");
-            deploy::deploy_zip(
-                archive,
-                &self.sites_dir,
-                &request.hostname,
-                MAX_FILES,
-                MAX_DEPLOY_BYTES,
-            )
+            deploy::extract_zip_files(archive, MAX_FILES, MAX_DEPLOY_BYTES)
         } else {
-            deploy::deploy_files(files, &self.sites_dir, &request.hostname)
+            deploy::validate_files(&files).map(|_| files)
         };
 
-        if let Err(error) = deployment {
-            let message = error.to_string();
-            return json_error_owned(400, message);
-        }
+        let files = match files {
+            Ok(files) => files,
+            Err(error) => return json_error_owned(400, error.to_string()),
+        };
+        if let Err(error) = self.storage.deploy(&request.hostname, files).await {
+            return json_error_owned(500, error.to_string());
+        };
 
         let port = request_host
             .rsplit_once(':')
@@ -198,8 +174,19 @@ impl ServeHttp for StaticHost {
         if method != Method::GET && method != Method::HEAD {
             return text_response(405, "Method not allowed.");
         }
-        self.static_response(&host, &request_path)
+        self.static_response(&host, &request_path).await
     }
+}
+
+fn asset_candidates(relative_path: &Path, request_path: &str) -> Vec<PathBuf> {
+    let mut candidates = vec![relative_path.to_path_buf()];
+    if request_path.ends_with('/') && relative_path != Path::new("index.html") {
+        candidates.push(relative_path.join("index.html"));
+    } else if Path::new(request_path).extension().is_none() && request_path != "/" {
+        candidates.push(relative_path.join("index.html"));
+        candidates.push(PathBuf::from("index.html"));
+    }
+    candidates
 }
 
 async fn read_body(session: &mut ServerSession) -> Result<Vec<u8>, &'static str> {
@@ -387,6 +374,22 @@ mod tests {
         assert!(safe_relative_path("/../secret").is_none());
         assert!(safe_relative_path("/%2e%2e/secret").is_none());
         assert!(safe_relative_path("/%ZZ").is_none());
+    }
+
+    #[test]
+    fn builds_asset_candidates_for_directories_and_spa_routes() {
+        assert_eq!(
+            asset_candidates(Path::new("docs"), "/docs"),
+            [
+                PathBuf::from("docs"),
+                PathBuf::from("docs/index.html"),
+                PathBuf::from("index.html")
+            ]
+        );
+        assert_eq!(
+            asset_candidates(Path::new("assets/app.js"), "/assets/app.js"),
+            [PathBuf::from("assets/app.js")]
+        );
     }
 
     #[test]
