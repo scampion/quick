@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 description = "A small internal static hosting platform inspired by Shopify Quick"
+repository = "https://github.com/scampion/quick"
+readme = "README.md"
 
 [dependencies]
 async-trait = "0.1"
@@ -17,3 +19,7 @@ serde_json = "1.0"
 
 [dev-dependencies]
 tempfile = "3.20"
+
+[profile.release]
+lto = "thin"
+strip = "symbols"

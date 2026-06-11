@@ -71,3 +71,23 @@ demo.localhost -> Pingora -> fichier statique
 ```sh
 cargo test
 ```
+
+## Releases
+
+Les tags sémantiques `vX.Y.Z` déclenchent le workflow GitHub Actions de release.
+La version du tag doit correspondre à celle de `Cargo.toml`.
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Après les vérifications (`fmt`, Clippy et tests), GitHub publie une release avec:
+
+- Linux x86_64;
+- macOS Intel;
+- macOS Apple Silicon;
+- une somme SHA-256 pour chaque archive.
+
+Le workflow peut aussi être lancé manuellement depuis GitHub Actions; dans ce
+cas, il compile et conserve les artefacts sans créer de GitHub Release.
