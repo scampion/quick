@@ -345,6 +345,244 @@
         }
       }
     </style>
+    <style>
+      :root {
+        --quick-purple: #5437f5;
+        --quick-purple-dark: #3f26d6;
+        --quick-ink: #090909;
+        --quick-white: #fffefb;
+        --quick-green: #c9ff66;
+      }
+      body {
+        color: var(--quick-ink);
+        background-color: var(--quick-purple);
+        background-image:
+          linear-gradient(rgba(255, 255, 255, .09) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, .09) 1px, transparent 1px),
+          linear-gradient(rgba(255, 255, 255, .035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, .035) 1px, transparent 1px);
+        background-size: 84px 84px, 84px 84px, 21px 21px, 21px 21px;
+        font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+      }
+      body::before,
+      body::after { display: none; }
+      .shell {
+        width: min(1180px, calc(100% - 44px));
+      }
+      header {
+        padding: 25px 2px;
+        color: white;
+      }
+      .brand {
+        gap: 11px;
+        font-size: 16px;
+        font-weight: 750;
+      }
+      .mark {
+        width: 30px;
+        height: 30px;
+        border: 2px solid var(--quick-ink);
+        border-radius: 50%;
+        background: white;
+        color: var(--quick-ink);
+        box-shadow: 3px 3px 0 var(--quick-ink);
+        font-weight: 800;
+      }
+      .status { color: rgba(255, 255, 255, .78); }
+      .status::before {
+        background: var(--quick-green);
+        box-shadow: 0 0 0 4px rgba(201, 255, 102, .16);
+      }
+      main {
+        grid-template-columns: minmax(320px, .82fr) minmax(520px, 1.18fr);
+        gap: clamp(44px, 7vw, 105px);
+        padding: 54px 0 100px;
+      }
+      .intro { color: white; }
+      .eyebrow {
+        margin-bottom: 20px;
+        color: var(--quick-green);
+        font-weight: 750;
+      }
+      h1 {
+        max-width: 510px;
+        color: white;
+        font-family: Georgia, "Times New Roman", serif;
+        font-size: clamp(72px, 8.6vw, 126px);
+        font-style: italic;
+        font-weight: 700;
+        line-height: .75;
+        letter-spacing: -.085em;
+        transform: rotate(-3deg);
+        transform-origin: left center;
+        text-shadow:
+          3px 3px 0 var(--quick-ink),
+          6px 6px 0 var(--quick-ink),
+          9px 9px 0 var(--quick-ink);
+      }
+      h1 em {
+        display: inline-block;
+        margin: 20px 0 0 34px;
+        color: white;
+        font-weight: 700;
+      }
+      .lede {
+        max-width: 370px;
+        margin-top: 50px;
+        color: rgba(255, 255, 255, .86);
+        font-size: 16px;
+        line-height: 1.55;
+      }
+      .workspace {
+        padding: 13px;
+        border: 3px solid var(--quick-ink);
+        border-radius: 18px;
+        background: var(--quick-white);
+        box-shadow: 13px 13px 0 var(--quick-ink);
+        backdrop-filter: none;
+        transform: rotate(.8deg);
+      }
+      .workspace::before {
+        content: "DROP / SHIP / SHARE";
+        width: auto;
+        height: auto;
+        right: 24px;
+        top: -16px;
+        padding: 7px 11px 6px;
+        z-index: 2;
+        border: 2px solid var(--quick-ink);
+        border-radius: 4px;
+        background: var(--quick-green);
+        color: var(--quick-ink);
+        font: 800 9px "SFMono-Regular", Consolas, monospace;
+        letter-spacing: .08em;
+        transform: rotate(2deg);
+      }
+      .drop {
+        min-height: 308px;
+        padding: 45px 34px;
+        border: 2px dashed rgba(9, 9, 9, .32);
+        border-radius: 10px;
+        background:
+          radial-gradient(circle at 50% 0%, rgba(84, 55, 245, .08), transparent 48%),
+          white;
+        transform: none;
+      }
+      .drop:hover,
+      .drop:focus-visible {
+        border-color: var(--quick-purple);
+        border-radius: 10px;
+        background: #f8f6ff;
+        transform: none;
+      }
+      .drop.dragging {
+        color: white;
+        border-color: var(--quick-ink);
+        border-radius: 10px;
+        background: var(--quick-purple);
+        transform: none;
+      }
+      .drop-icon {
+        width: 54px;
+        height: 54px;
+        margin-bottom: 22px;
+        border: 2px solid var(--quick-ink);
+        background: var(--quick-green);
+        color: var(--quick-ink);
+        box-shadow: 4px 4px 0 var(--quick-ink);
+        font-size: 29px;
+        font-weight: 700;
+      }
+      .drop:hover .drop-icon,
+      .drop:focus-visible .drop-icon {
+        background: var(--quick-green);
+        transform: translate(-2px, -2px) rotate(90deg);
+        box-shadow: 6px 6px 0 var(--quick-ink);
+      }
+      .drop-copy h2 {
+        font-family: "Avenir Next", Avenir, sans-serif;
+        font-size: clamp(27px, 3vw, 36px);
+        font-weight: 800;
+        letter-spacing: -.045em;
+      }
+      .drop-hint,
+      .file-meta { font-size: 10px; }
+      .file-meta {
+        color: var(--quick-purple-dark);
+        font-weight: 650;
+      }
+      .zip-picker {
+        color: var(--quick-purple-dark);
+        text-decoration-color: var(--quick-purple);
+        font-weight: 750;
+      }
+      .config {
+        padding: 26px 16px 11px;
+      }
+      .config label {
+        color: #5d5a55;
+        font-weight: 750;
+      }
+      .host-row {
+        padding: 0 0 11px;
+        border-color: #bbb8b1;
+      }
+      .host-row:focus-within {
+        border-color: var(--quick-purple);
+        box-shadow: 0 2px 0 var(--quick-purple);
+      }
+      .host-row input {
+        font-size: clamp(17px, 2vw, 22px);
+        font-weight: 700;
+      }
+      .rules { color: #75716a; }
+      .rules li + li::before { content: " / "; }
+      button {
+        border: 2px solid var(--quick-ink);
+        border-radius: 7px;
+        background: var(--quick-ink);
+        box-shadow: 4px 4px 0 var(--quick-purple);
+        font-weight: 800;
+      }
+      button:hover:not(:disabled) {
+        background: var(--quick-purple);
+        transform: translate(-2px, -2px);
+        box-shadow: 6px 6px 0 var(--quick-ink);
+      }
+      button:disabled {
+        box-shadow: none;
+        opacity: .3;
+      }
+      .message.success a { color: var(--quick-purple-dark); }
+      footer {
+        color: rgba(255, 255, 255, .68);
+      }
+      @media (max-width: 880px) {
+        .shell { width: min(640px, calc(100% - 30px)); }
+        main {
+          grid-template-columns: 1fr;
+          gap: 72px;
+          padding-top: 70px;
+        }
+        .intro { text-align: center; }
+        h1 {
+          max-width: none;
+          transform-origin: center;
+        }
+        h1 em { margin-left: 10px; }
+        .lede { margin: 52px auto 0; }
+        .workspace { transform: none; }
+      }
+      @media (max-width: 520px) {
+        .shell { width: min(100% - 22px, 640px); }
+        main { gap: 56px; padding-top: 52px; }
+        h1 { font-size: clamp(68px, 23vw, 98px); }
+        .workspace { padding: 9px; box-shadow: 8px 8px 0 var(--quick-ink); }
+        .workspace::before { right: 13px; }
+        .drop { min-height: 275px; padding: 38px 20px; }
+        .config { padding: 25px 8px 9px; }
+      }
+    </style>
   </head>
   <body>
     <div class="shell">
@@ -354,8 +592,8 @@
       </header>
       <main>
         <section class="intro">
-          <p class="eyebrow">Hébergement instantané</p>
-          <h1>Posez-le.<br><em>Il vit.</em></h1>
+          <p class="eyebrow">Quick hosting</p>
+          <h1>Drop.<br><em>Ship.</em></h1>
           <p class="lede">Un dossier ou un ZIP, un nom, et votre site est en ligne. Rien d’autre à configurer.</p>
         </section>
 
